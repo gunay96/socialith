@@ -24,7 +24,9 @@ export type AuditAction =
   // TOKEN_REFRESHED / STATUS_CHANGED land in the phase that implements
   // the real OAuth flow those describe, not before.
   | "SOCIAL_ACCOUNT_DISCONNECTED"
-  | "SOCIAL_ACCOUNT_CONNECTED";
+  | "SOCIAL_ACCOUNT_CONNECTED"
+  // Written by the one-time production owner bootstrap CLI (TD-32).
+  | "OWNER_BOOTSTRAPPED";
 
 interface CreateAuditLogInput {
   organizationId: string;
