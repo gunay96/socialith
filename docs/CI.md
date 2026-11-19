@@ -13,7 +13,10 @@ reference, outside CI).
   already committed in `docker-compose.mysql-test.yml`, and are allow-listed (narrowly) in the secret scanner.
 - The pnpm version comes only from the root `package.json` `packageManager` field (`pnpm@9.0.0`); the
   `pnpm/action-setup` step must **not** also set `version:` (it fails with "Multiple versions of pnpm specified").
-- Third-party actions are the official `actions/*` and `pnpm/action-setup`, pinned to a major version.
+- Third-party actions are the official `actions/*` and `pnpm/action-setup`, pinned to a major version. All three
+  (`actions/checkout@v6`, `actions/setup-node@v6`, `pnpm/action-setup@v6`) declare `runs.using: node24` in their
+  `action.yml`; the v4 generation ran on the deprecated Node 20 runtime. This is the actions' own runtime — the
+  project itself still targets Node 20 (`setup-node` `node-version: 20`, `engines`).
 
 ## Jobs
 
