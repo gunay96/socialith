@@ -166,8 +166,57 @@ const envSchema = z
     R2_SECRET_ACCESS_KEY: z.string().optional(),
     R2_BUCKET_NAME: z.string().default("socialith"),
     R2_PUBLIC_URL: emptyStringAsUndefined(z.string().url().optional()),
+    // Phase 2: Upload-Post (packages/upload-post). SERVER-SIDE ONLY: the key
+    // is read by apps/api and apps/worker, never sent to the browser and never
+    // logged. Unset = the integration reports "not configured" (never a fake
+    // success); it does not block boot.
+    UPLOAD_POST_API_KEY: emptyStringAsUndefined(z.string().min(8, "UPLOAD_POST_API_KEY looks too short").optional()),
+    // Defaults to the provider's production API; must be https in production
+    // (a loopback http URL is accepted only outside production, for the mock server).
+    UPLOAD_POST_BASE_URL: emptyStringAsUndefined(z.string().url().optional()),
+    UPLOAD_POST_TIMEOUT_MS: emptyStringAsUndefined(z.coerce.number().int().min(1_000).max(120_000).optional()).default(15_000),
+    UPLOAD_POST_PUBLISH_TIMEOUT_MS: emptyStringAsUndefined(z.coerce.number().int().min(5_000).max(300_000).optional()).default(60_000),
+    // Webhook signing secret(s) (Upload-Post "Signing secret"). The PREVIOUS one is
+    // only for the minutes during a rotation. Without a secret the webhook route
+    // answers 503 and processes nothing.
+    UPLOAD_POST_WEBHOOK_SECRET: emptyStringAsUndefined(z.string().min(16, "UPLOAD_POST_WEBHOOK_SECRET must be at least 16 characters").optional()),
+    UPLOAD_POST_WEBHOOK_SECRET_PREVIOUS: emptyStringAsUndefined(z.string().min(16).optional()),
+    // How often the worker re-synchronizes provider profiles/accounts (it also
+    // syncs on demand from the dashboard).
+    // Which Socialith organization the (single, deployment-wide) Upload-Post API key belongs to.
+    // Optional when the deployment has exactly one organization (then that one is used);
+    // required as soon as there are several.
+    UPLOAD_POST_ORGANIZATION_ID: emptyStringAsUndefined(z.string().min(1).optional()),
+    UPLOAD_POST_SYNC_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(1_440).default(30),
+    // Hybrid scheduling (Socialith owns the master schedule). OFF by default:
+    // when on, a target due within the window is handed to Upload-Post's own
+    // scheduler and Socialith's BullMQ job for it is suppressed — never both.
+    UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED: emptyStringAsUndefined(
+      z.enum(["true", "false"]).optional(),
+    )
+      .default("false")
+      .transform((v) => v === "true"),
+    UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS: z.coerce.number().int().min(1).max(168).default(48),
   })
   .superRefine((env, ctx) => {
+    if (env.UPLOAD_POST_BASE_URL) {
+      const host = safeHostname(env.UPLOAD_POST_BASE_URL);
+      const isHttps = env.UPLOAD_POST_BASE_URL.startsWith("https://");
+      if (env.NODE_ENV === "production" && !isHttps) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["UPLOAD_POST_BASE_URL"],
+          message: "UPLOAD_POST_BASE_URL must use https in production.",
+        });
+      } else if (!isHttps && !isLocalHostname(host)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["UPLOAD_POST_BASE_URL"],
+          message: "UPLOAD_POST_BASE_URL must use https (plain http is only accepted for a loopback test server).",
+        });
+      }
+    }
+
     if (env.NODE_ENV !== "production") return;
 
     if (!env.NEXT_PUBLIC_APP_URL) {
