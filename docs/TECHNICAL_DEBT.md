@@ -55,6 +55,50 @@ New items found by the real MySQL run:
 | TD-29 | S3 | Superseded cPanel ZIPs (contain the BOM defect) still exist in `deploy-clean/` and the private backup | [live] | Someone could upload a broken package | Marked superseded in `DEPLOYMENT_PLAN.md`; folder is git-ignored; delete after the VPS is verified |
 | TD-30 | S3 | Turkish dotless `ı` ≠ `i` under `utf8mb4_unicode_ci` search | [test] | `kapi` does not find `Kapı` | Accept for now; evaluate a Turkish collation or normalized search column when the Text Library/search is built (Phase 5) |
 
+## Status updates — after Phase 1 (2026-11-19, branch `phase1-infrastructure`)
+
+| ID | New status |
+|---|---|
+| TD-04 | **Resolved for the canonical stack**: the worker boots healthy (all 11 BullMQ workers ready) in the new VPS compose. The **legacy** worker is intentionally *not* repaired (legacy stack untouched by instruction); its root cause is documented. |
+| TD-05 | **Resolved**: DB→Redis reconciler (boot + every minute), stale-content hold, stuck-PUBLISHING recovery. Drilled on a real stack incl. a total Redis wipe. |
+| TD-16 | **Resolved**: production config refuses a missing/localhost `API_PUBLIC_URL`; one URL set feeds api, worker and migrate. |
+| TD-23 | **Mitigated**: `bootstrap.ts` entry points validate config first and emit one structured fatal line; module-scope `loadEnv()` calls still exist but can no longer crash unreadably. |
+| TD-26 | **Resolved**: `connectAccount` retries the lost upsert race. Before: 9 of 10 simultaneous callbacks failed; after: 10/10 succeed on MySQL 8.0 and 8.4. |
+| TD-17 | Narrowed: a MySQL-based compose exists; **CI is still PostgreSQL-era** (no repo workflow runs the MySQL/Redis integration suites yet). |
+| TD-18 | Improved: real-database suites for api (22 tests) and worker (18 tests). No automated HTTP/browser E2E in the repo (the E2E run was manual, documented in `VPS_DEPLOYMENT.md` §7). |
+| TD-25, TD-30 | Open (unchanged). |
+
+New items found in Phase 1:
+
+| ID | Sev | Debt | Evidence | Consequence | Fix direction |
+|---|---|---|---|---|---|
+| TD-31 | S3 | Test files are excluded from `tsc` (`tsconfig.base.json` excludes `**/*.test.ts`) | [live] a missing `vi` import in an integration test was not caught by typecheck | Type errors in tests surface only at runtime | Add a test tsconfig / `typecheck:tests` step to CI |
+| TD-32 | **S1** | **No production bootstrap-owner command**: the only way to create the first OWNER is `seed.ts`, which also creates demo accounts and a known dev password | [code] | Nobody can log in on a real deployment without running the dev seed (must never run in production) | Add a one-off, non-seed `create-owner` command (needs approval; Phase 8 e-mail not required) |
+| TD-33 | S3 | A held (stale) item cannot be re-scheduled from the UI — only `PENDING` targets are re-scheduled; Retry (publish now) is the supported path | [code] | Awkward recovery for held items | Let `scheduleContent` re-arm FAILED/held targets, or add a "Reschedule held" action |
+| TD-34 | **S1** | **No off-site backup** (dump stays on the VPS disk); binlog PITR not drilled | [code] | VPS loss = data loss | rclone/`aws s3` sync to R2/other region with write-only credentials; drill PITR |
+| TD-35 | S2 | No monitoring/alerting stack; only health endpoints and container healthchecks | [code] | Outages and backlogs go unnoticed | External uptime check + log/metric shipping (`OPERATIONS_RUNBOOK.md` §4) |
+| TD-36 | S3 | `content` has no index on `(status, scheduled_at)`; the reconciler's per-minute `status = 'SCHEDULED'` scan relies on `(organization_id, status)` which cannot serve it | [code] | Full-table scan each minute — fine at thousands of rows, not at hundreds of thousands | Additive migration adding the index when volume warrants |
+| TD-37 | S3 | Legacy Docker stack's worker is still crash-looping (deliberately left untouched) | [live] | Confusing if someone reads its logs | Remove the legacy stack once the VPS deployment is verified |
+
+## Status updates — Phase 1 final hardening (2026-11-19, branch `phase1-infrastructure`)
+
+| ID | New status |
+|---|---|
+| TD-32 | **Resolved**: `apps/api/src/cli/bootstrap-owner.ts` (procedure: `VPS_DEPLOYMENT.md` §4a). Production-only, `--confirm-domain`, refuses if any user or the dev seed exists, idempotent for the identical owner, SERIALIZABLE transaction (8-way race: exactly one owner, 10 rounds × 2 runs on MySQL 8.0 and 8.4), password only via hidden prompt / stdin / file, never logged. Drilled in the real api image against MySQL 8.4 with the DML-only account, incl. a real pseudo-terminal and a successful login through the production-mode API. |
+| TD-17 | **Resolved**: `.github/workflows/ci.yml` rewritten for MySQL 8.4 + Redis (jobs `hygiene`, `verify`, `images`; `docs/CI.md`). Every step replayed locally. **Owner action:** require the three checks in branch protection. First real GitHub run still pending (no push yet). |
+| TD-07 | Documented, **still open (owner)**: `SECURITY_CREDENTIAL_ROTATION.md` — the secret was found only in local git-ignored files and the legacy containers, never in Git; rotation at TikTok is the only fix. |
+| TD-27 | Guarded: the CI `hygiene` job fails on a BOM in Prisma migrations / shell / YAML / TOML and on CRLF in migrations/shell. |
+| TD-31 | Still open (test files not typechecked). |
+
+New items found in the hardening pass:
+
+| ID | Sev | Debt | Evidence | Consequence | Fix direction |
+|---|---|---|---|---|---|
+| TD-38 | S3 | Windows PowerShell 5.1 prepends a UTF-8 BOM to text piped to native programs | [live] caught by the bootstrap drill: the owner's stored password began with U+FEFF and login returned 401 | Any tool that takes a secret on stdin from PowerShell 5.1 can silently store a different secret than typed | Fixed for the bootstrap command (one leading BOM is stripped from stdin/file input). Keep in mind for any future stdin-fed tool |
+| TD-39 | S3 | A GET_LOCK-based "single owner" guard is **not** safe with pooled connections: the lock is released before the transaction commits | [test] two owners created in 1 of 3 racing rounds on MySQL 8.0 | — | Replaced by a SERIALIZABLE transaction + retry; the race test (10 rounds × 8 racers) stays as the regression guard |
+| TD-40 | S3 | CI runs MySQL 8.4 only; MySQL 8.0 compatibility is verified manually | [code] | An 8.0-only regression would not be caught on push | Add a matrix entry if 8.0 support is still wanted (it reaches end of life in April 2026) |
+| TD-41 | S3 | Deadlock-victim retries make Prisma log `prisma:error` lines during the concurrency tests | [test] | Noisy test output only; the retry is the intended behaviour | Accept |
+
 ## Debt that is **not** debt (preserve)
 
 Layered architecture (routes → controllers → services → repositories), org-scoped

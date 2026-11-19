@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@socialith/database";
 import { decryptToken, hashPassword, parseEncryptionKey } from "@socialith/auth";
+import { logger } from "../logger.js";
 import { authenticateWithPassword } from "../services/auth.service.js";
 import { connectAccount } from "../services/social-account.service.js";
 import { listCampaigns } from "../repositories/campaign.repository.js";
@@ -63,7 +64,7 @@ suite("MySQL integration (real server, real migration, real code)", () => {
     it("reports the server version (recorded for the compatibility matrix)", async () => {
       const rows = await prisma.$queryRaw<{ v: string }[]>`SELECT VERSION() AS v`;
       const version = rows[0]?.v ?? "";
-      console.info(`[mysql-integration] server version: ${version}`);
+      logger.info({ suite: "mysql-integration", serverVersion: version }, "server version (compatibility matrix)");
       expect(version).toMatch(/^(8\.0|8\.4|5\.7)\./);
     });
 
@@ -258,7 +259,10 @@ suite("MySQL integration (real server, real migration, real code)", () => {
       // MySQL has no native Prisma upsert, so a lost race may surface as P2002 —
       // that is the only acceptable failure, and it is reported, not hidden.
       for (const r of rejected) expect(r.reason).toMatchObject({ code: "P2002" });
-      console.info(`[mysql-integration] concurrent upserts: ${results.length - rejected.length} ok, ${rejected.length} lost-race P2002`);
+      logger.info(
+        { suite: "mysql-integration", ok: results.length - rejected.length, lostRaceP2002: rejected.length },
+        "concurrent upserts",
+      );
       expect(await prisma.socialAccount.count({ where: { organizationId: org.id } })).toBe(1);
     });
   });
@@ -309,6 +313,86 @@ suite("MySQL integration (real server, real migration, real code)", () => {
       expect(await prisma.socialAccount.count({ where: { organizationId: org.id } })).toBe(1);
       expect((await getConnectionSummary(account.id))?.scopes).toEqual(["user.info.basic", "video.list", "video.upload"]);
       expect((await prisma.socialAccount.findUniqueOrThrow({ where: { id: account.id } })).handle).toBe("@connected2");
+    });
+  });
+
+  describe("concurrent OAuth callbacks (TD-26 — the lost upsert race)", () => {
+    const input = (externalAccountId: string, i: number) => ({
+      platform: "TIKTOK" as const,
+      externalAccountId,
+      handle: `@race${i}`,
+      displayName: `Race ${i}`,
+      accessToken: `token-${i}-`.padEnd(400, "x"),
+      scopes: ["user.info.basic", "video.upload"],
+    });
+
+    it("10 simultaneous callbacks for the same account ALL succeed and leave exactly one consistent account (3 rounds)", async () => {
+      const org = await makeOrg("connect-race");
+      const actor = asSafeUser(await makeUser(org.id, `race-${org.slug}@example.com`));
+      const key = parseEncryptionKey("ab".repeat(32));
+
+      for (let round = 0; round < 3; round++) {
+        const externalAccountId = `race-${round}`;
+        const results = await Promise.allSettled(Array.from({ length: 10 }, (_, i) => connectAccount(actor, input(externalAccountId, i))));
+
+        const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected").map((r) => String(r.reason));
+        expect(rejected, `round ${round}: every callback must succeed`).toEqual([]);
+
+        const accounts = await prisma.socialAccount.findMany({ where: { organizationId: org.id, externalAccountId } });
+        expect(accounts).toHaveLength(1);
+        const connections = await prisma.platformConnection.findMany({ where: { socialAccountId: accounts[0]!.id } });
+        expect(connections).toHaveLength(1);
+        expect(decryptToken(connections[0]!.encryptedAccessToken ?? "", key)).toMatch(/^token-\d+-x+$/);
+        expect(accounts[0]!.status).toBe("CONNECTED");
+      }
+    });
+
+    it("recovers from an injected P2002 (lost race): the transaction is re-run and succeeds", async () => {
+      const org = await makeOrg("inject-p2002");
+      const actor = asSafeUser(await makeUser(org.id, `p2002-${org.slug}@example.com`));
+      const spy = vi
+        .spyOn(prisma, "$transaction")
+        .mockImplementationOnce((async () => {
+          throw Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+        }) as never);
+      try {
+        const account = await connectAccount(actor, input("injected-1", 1));
+        expect(spy).toHaveBeenCalledTimes(2); // 1 injected failure + 1 real run
+        expect(account.externalAccountId).toBe("injected-1");
+        expect(await prisma.socialAccount.count({ where: { organizationId: org.id } })).toBe(1);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("recovers from an injected P2034 (deadlock / write conflict)", async () => {
+      const org = await makeOrg("inject-p2034");
+      const actor = asSafeUser(await makeUser(org.id, `p2034-${org.slug}@example.com`));
+      const spy = vi
+        .spyOn(prisma, "$transaction")
+        .mockImplementationOnce((async () => {
+          throw Object.assign(new Error("Transaction failed due to a write conflict or a deadlock"), { code: "P2034" });
+        }) as never);
+      try {
+        await expect(connectAccount(actor, input("injected-2", 2))).resolves.toBeTruthy();
+        expect(spy).toHaveBeenCalledTimes(2);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it("does not swallow an unrelated database error", async () => {
+      const org = await makeOrg("inject-other");
+      const actor = asSafeUser(await makeUser(org.id, `other-${org.slug}@example.com`));
+      const spy = vi.spyOn(prisma, "$transaction").mockImplementation((async () => {
+        throw new Error("connection lost");
+      }) as never);
+      try {
+        await expect(connectAccount(actor, input("injected-3", 3))).rejects.toThrow("connection lost");
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 });

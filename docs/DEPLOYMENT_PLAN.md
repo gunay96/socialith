@@ -47,6 +47,9 @@ a BOM defect in the migration files; they are not maintained. Do not use them.
 Nothing is purchased and no DNS record is changed by this project's tooling. Buying the VPS and creating DNS records are
 owner actions (see `SOURCE_CONTROL_AND_INFRA_CHECKLIST.md` §I).
 
+> **Implemented in Phase 1:** `infra/vps/` (compose, Caddyfile, MySQL init, Redis config, backup/restore/smoke scripts,
+> `.env.example`). Procedure: `VPS_DEPLOYMENT.md`; operations: `OPERATIONS_RUNBOOK.md`. Verified locally, **not deployed**.
+
 ## 3. Environment matrix (names only)
 
 | Concern | Variables |
@@ -61,7 +64,14 @@ owner actions (see `SOURCE_CONTROL_AND_INFRA_CHECKLIST.md` §I).
 Rule that would have prevented the current outage: **every service that calls `loadEnv()` receives the same
 URL variables**; add a compose-level check and a boot-time structured error naming the offending variable.
 
-## 4. Safest way to restore the worker (after approval)
+## 4. Restoring the worker — OUTCOME (Phase 1)
+
+The legacy worker was **not** repaired: the owner's instruction was to leave the legacy PostgreSQL stack untouched until a
+verified replacement exists. Instead the root cause was fixed in the canonical stack (one shared URL set + a config that
+refuses to boot without it) and the worker was brought up healthy in the new MySQL/VPS compose, where it was exercised
+end to end (`VPS_DEPLOYMENT.md` §7). The text below is the original plan for the legacy stack, kept for reference only.
+
+### 4a. Original plan for the legacy stack (superseded, not executed)
 
 Goal: bring the worker up without touching data or the healthy services.
 

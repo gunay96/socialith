@@ -4,8 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
- * Vitest globalSetup for the MySQL integration suite. Lives outside `src/`
- * on purpose so the production build never emits it into dist/.
+ * Shared Vitest globalSetup for every MySQL integration suite
+ * (apps/api, apps/worker). Lives outside any `src/` on purpose so no
+ * production build ever emits it.
  *
  * Applies the real, committed migrations (`prisma migrate deploy` — exactly
  * what production runs) to the target database before any test executes.
@@ -17,7 +18,7 @@ export default function setup(): void {
   if (!url) throw new Error("MYSQL_INTEGRATION_URL is required.");
 
   const here = path.dirname(fileURLToPath(import.meta.url));
-  const databasePackage = path.resolve(here, "../../packages/database");
+  const databasePackage = path.resolve(here, "../packages/database");
   const requireFromDatabase = createRequire(path.join(databasePackage, "package.json"));
   const prismaCli = path.join(path.dirname(requireFromDatabase.resolve("prisma/package.json")), "build", "index.js");
 

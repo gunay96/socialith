@@ -135,7 +135,7 @@ env file other than `.env.example`.
 | Environment variable matrix (api **and worker** URL variables) | ✅ in DEPLOYMENT_PLAN §3 |
 | Upload-Post architecture | ✅ `docs/UPLOAD_POST_INTEGRATION.md` (verification plan in Phase 2) |
 
-## I. Phase 1 — infrastructure repair (⬜ not started; starts only after you approve Phase 0)
+## I. Phase 1 — infrastructure repair (✅ implemented and verified locally on branch `phase1-infrastructure`; awaiting your approval; not merged, not deployed)
 
 Owner prerequisites (🔒 nothing below is done or purchased by me):
 - [ ] 🔒 Choose provider and buy the VPS (Linux, 4 vCPU / 8 GB / ≥80 GB SSD, Ubuntu LTS); give me the IP and an SSH access method.
@@ -143,19 +143,21 @@ Owner prerequisites (🔒 nothing below is done or purchased by me):
 - [ ] Create: Cloudflare R2 bucket + keys, transactional e-mail provider, a *rotated* TikTok secret.
 - [ ] Upload-Post: API key for a **controlled test profile** first (needed for Phase 2).
 
-Engineering checklist (Phase 1):
-- [ ] VPS hardening: non-root deploy user, SSH keys only, firewall 22/80/443, unattended security updates, fail2ban.
-- [ ] `docker-compose.vps.yml`: caddy/nginx (HTTPS), web, api, worker, MySQL 8.4, Redis (AOF on), FFmpeg in the worker image; no published DB/Redis ports.
-- [ ] Env: one shared URL set (`NEXT_PUBLIC_APP_URL`, `API_PUBLIC_URL`, web build arg) given to **api, worker and web build**; boot-time check that fails loudly on localhost in production.
-- [ ] Worker boot repair (root cause already identified: worker lacks the URL overrides the api gets) with a compose healthcheck.
-- [ ] Scheduling reliability: DB→Redis reconciliation sweeper; recovery of missing/overdue jobs; **stale-content guard** (a scheduled item overdue by more than a configurable window is *held for review*, never auto-published); the 5 overdue seed targets are explicitly **never executed**.
-- [ ] Redis persistence (AOF `everysec`) and MySQL backups (nightly dump + binlog/PITR decision) to R2, with a **restore drill**.
-- [ ] Rewrite CI for MySQL (`docker-compose.mysql-test.yml` services), secret scan, tracked-env check.
-- [ ] Fix TD-26 (upsert race) before real OAuth traffic.
-- [ ] Phase report: files, DB changes, tests, risks, rollback; wait for approval.
+Engineering checklist (Phase 1) — see `VPS_DEPLOYMENT.md` §7 for the evidence behind each tick:
+- [~] VPS hardening: **documented** (`VPS_DEPLOYMENT.md` §3); applies to a server that does not exist yet — not executed.
+- [x] `infra/vps/docker-compose.yml`: Caddy (HTTPS), web, api, worker, MySQL 8.4, Redis (AOF), FFmpeg in the worker image; no published DB/Redis ports (verified).
+- [x] Env: one shared URL set given to api, worker and migrate; boot-time check refuses localhost/missing URLs in production (verified on the real images).
+- [x] Worker boot repair: root cause fixed and the worker runs healthy in the new stack (legacy worker deliberately untouched).
+- [x] Scheduling reliability: DB→Redis reconciler (+ self-healing schedules), stale-content hold, stuck-PUBLISHING recovery; the overdue seed rows are held and demo accounts can never publish (verified, incl. total Redis wipe and worker down/up).
+- [x] Redis persistence (AOF everysec) verified; MySQL nightly dump + verified restore drill + real disaster recovery verified. **Off-site copy and PITR drill not done** (TD-34).
+- [x] CI rewritten for MySQL 8.4 + Redis: migrations, drift check, unit, API + worker integration, typecheck, lint, build, image build, secret/BOM/tracked-env scan (TD-17; `docs/CI.md`). Steps replayed locally; **first GitHub run pending**; branch protection is an owner action.
+- [x] Fix TD-26 (upsert race) — resolved and proven on MySQL 8.0 and 8.4.
+- [x] **Final hardening:** production owner bootstrap command (TD-32; `VPS_DEPLOYMENT.md` §4a) with tests, and the TikTok credential-rotation procedure (`SECURITY_CREDENTIAL_ROTATION.md`; **rotation itself is owner-only and still pending**).
+- [x] Phase report: files, DB changes, tests, risks, rollback (`docs/PHASE1_ACCEPTANCE.md`); waiting for approval.
 
 ## J. Open decisions / actions waiting on you
-1. Create the private GitHub repo and push (§F).
-2. Approve Phase 0 so Phase 1 can start.
+1. ~~Create the private GitHub repo and push (§F)~~ — done (`main` = `2bc24cf`, tags `baseline-gen2`, `phase0-complete`).
+2. Review and approve Phase 1 (branch `phase1-infrastructure`, **not merged into `main`**) so Phase 2 can start.
+   Also: **rotate the TikTok client secret** (`SECURITY_CREDENTIAL_ROTATION.md` §1) and, after the first push, require the CI checks in branch protection (`CI.md`).
 3. Decide when to buy the VPS and which provider (nothing is purchased automatically).
 4. Confirm: should the two unrelated side projects get their own repositories?

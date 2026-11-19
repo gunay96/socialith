@@ -1,0 +1,278 @@
+# Socialith — production topology for a single Linux VPS (4 vCPU / 8 GB).
+#
+#   Internet ─ 80/443 ─ caddy (automatic HTTPS)
+#                         ├─ /api/*, /media/* → api:4000
+#                         └─ everything else  → web:3000
+#   backend network (nothing here is published to the host):
+#       mysql 8.4 · redis 7 (AOF) · api · worker (BullMQ + FFmpeg)
+#   one-shot: migrate (prisma migrate deploy) must finish before api/worker start
+#
+# This is NOT the legacy PostgreSQL stack (docker-compose.prod.yml at the repo
+# root) — different project name, networks and volumes; the two can coexist
+# on a machine and never share data.
+#
+# Usage (see docs/VPS_DEPLOYMENT.md):
+#   cp infra/vps/.env.example infra/vps/.env     # then fill every value
+#   docker compose -f infra/vps/docker-compose.yml --env-file infra/vps/.env up -d --build
+#
+# Every secret comes from infra/vps/.env (git-ignored) — nothing is baked into
+# an image or this file. `${VAR:?msg}` makes Compose refuse to start when a
+# required value is missing, instead of booting half-configured.
+name: socialith
+
+x-restart: &restart
+  restart: unless-stopped
+
+# ONE URL set, given to every service that loads @socialith/config. The
+# worker crash loop of the legacy stack came from the worker not receiving the
+# URLs the API got; defining them once here makes that impossible.
+x-app-env: &app-env
+  NODE_ENV: production
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  NEXT_PUBLIC_APP_URL: https://${APP_DOMAIN:?APP_DOMAIN is required (e.g. app.example.com)}
+  API_PUBLIC_URL: https://${APP_DOMAIN}
+  DATABASE_URL: mysql://${MYSQL_APP_USER:-socialith_app}:${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}@mysql:3306/${MYSQL_DATABASE:-socialith}?connection_limit=10
+  REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379
+  SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?TOKEN_ENCRYPTION_KEY is required (64 hex chars)}
+  EMAIL_PROVIDER: ${EMAIL_PROVIDER:-console}
+  LOCAL_STORAGE_DIR: /app/data/media
+  SCHEDULE_STALE_AFTER_MINUTES: ${SCHEDULE_STALE_AFTER_MINUTES:-30}
+  SCHEDULING_RECONCILE_INTERVAL_SECONDS: ${SCHEDULING_RECONCILE_INTERVAL_SECONDS:-60}
+  PUBLISHING_STUCK_AFTER_MINUTES: ${PUBLISHING_STUCK_AFTER_MINUTES:-20}
+  PUBLISHING_RECOVERY_MAX_AGE_HOURS: ${PUBLISHING_RECOVERY_MAX_AGE_HOURS:-24}
+  # Optional integrations — empty means "not configured" (never a fake success).
+  TIKTOK_CLIENT_KEY: ${TIKTOK_CLIENT_KEY:-}
+  TIKTOK_CLIENT_SECRET: ${TIKTOK_CLIENT_SECRET:-}
+  META_APP_ID: ${META_APP_ID:-}
+  META_APP_SECRET: ${META_APP_SECRET:-}
+  GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+  GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+  R2_ACCOUNT_ID: ${R2_ACCOUNT_ID:-}
+  R2_ACCESS_KEY_ID: ${R2_ACCESS_KEY_ID:-}
+  R2_SECRET_ACCESS_KEY: ${R2_SECRET_ACCESS_KEY:-}
+  R2_BUCKET_NAME: ${R2_BUCKET_NAME:-socialith}
+  R2_PUBLIC_URL: ${R2_PUBLIC_URL:-}
+  AI_PROVIDER_API_KEY: ${AI_PROVIDER_API_KEY:-}
+  AI_PROVIDER_BASE_URL: ${AI_PROVIDER_BASE_URL:-}
+  AI_PROVIDER_MODEL: ${AI_PROVIDER_MODEL:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+
+services:
+  mysql:
+    <<: *restart
+    image: mysql:8.4
+    # Settings are passed as command-line arguments, NOT via a mounted .cnf
+    # file: mysqld silently ignores any config file that is world-writable
+    # (a Windows/NTFS bind mount, or a permissive umask on a server), and a
+    # config that is "mounted but ignored" is worse than none — this was found
+    # by checking @@innodb_buffer_pool_size on the running verification stack.
+    # A STARTING POINT sized for a 4 vCPU / 8 GB VPS shared with api, worker
+    # (FFmpeg) and web; revisit under real load (docs/OPERATIONS_RUNBOOK.md).
+    command:
+      # characters/comparisons — must match the migration's per-table collation
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # keep the strict default: lossy implicit conversions are bugs, not features
+      - --sql-mode=ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+      # memory: ~1 GiB buffer pool leaves room for the other services
+      - --innodb-buffer-pool-size=1G
+      - --innodb-redo-log-capacity=536870912
+      - --max-connections=100
+      # binary logging stays on (default in 8.x), 7-day window = point-in-time recovery between nightly dumps
+      - --binlog-expire-logs-seconds=604800
+      # slow-query visibility for the monitoring runbook
+      - --slow-query-log=ON
+      - --long-query-time=1
+      - --mysqlx=OFF
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-socialith}
+      # consumed by initdb/10-create-users.sh on the FIRST start of an empty volume
+      MYSQL_APP_USER: ${MYSQL_APP_USER:-socialith_app}
+      MYSQL_APP_PASSWORD: ${MYSQL_APP_PASSWORD:?MYSQL_APP_PASSWORD is required}
+      MYSQL_MIGRATE_USER: ${MYSQL_MIGRATE_USER:-socialith_migrate}
+      MYSQL_MIGRATE_PASSWORD: ${MYSQL_MIGRATE_PASSWORD:?MYSQL_MIGRATE_PASSWORD is required}
+      MYSQL_BACKUP_USER: ${MYSQL_BACKUP_USER:-socialith_backup}
+      MYSQL_BACKUP_PASSWORD: ${MYSQL_BACKUP_PASSWORD:?MYSQL_BACKUP_PASSWORD is required}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    stop_grace_period: 60s
+    mem_limit: 2g
+    networks: [backend]
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 512m
+    networks: [backend]
+
+  # One-shot schema migration with the DDL-capable user; api and worker
+  # (DML-only user) wait for it to complete successfully.
+  migrate:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    restart: "no"
+    working_dir: /app
+    command:
+      - node
+      - packages/database/node_modules/prisma/build/index.js
+      - migrate
+      - deploy
+      - --schema
+      - packages/database/prisma/schema.prisma
+    environment:
+      DATABASE_URL: mysql://${MYSQL_MIGRATE_USER:-socialith_migrate}:${MYSQL_MIGRATE_PASSWORD:?MYSQL_MIGRATE_PASSWORD is required}@mysql:3306/${MYSQL_DATABASE:-socialith}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [backend]
+
+  api:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      <<: *app-env
+      API_PORT: "4000"
+    volumes:
+      - media_data:/app/data/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    mem_limit: 1g
+    networks: [backend, frontend]
+
+  worker:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: apps/worker/Dockerfile
+    environment:
+      <<: *app-env
+      WORKER_PORT: "4100"
+      FFMPEG_PATH: ffmpeg
+    volumes:
+      - media_data:/app/data/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+    mem_limit: 2g
+    networks: [backend]
+
+  web:
+    <<: *restart
+    build:
+      context: ../..
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Empty = same-origin: the browser calls the page's own origin, which Caddy routes /api/* to the API.
+        NEXT_PUBLIC_API_URL: ""
+    environment:
+      NODE_ENV: production
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    mem_limit: 1g
+    networks: [frontend]
+
+  caddy:
+    <<: *restart
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required (Let's Encrypt contact)}
+      CADDY_GLOBAL_EXTRA: ${CADDY_GLOBAL_EXTRA:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    mem_limit: 256m
+    networks: [frontend]
+
+  # On-demand tools, never started by `up`:
+  #   docker compose … --profile tools run --rm backup sh /scripts/backup-mysql.sh
+  #   docker compose … --profile tools run --rm backup sh /scripts/restore-mysql.sh <file>
+  backup:
+    profiles: ["tools"]
+    image: mysql:8.4
+    entrypoint: []
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-socialith}
+      MYSQL_BACKUP_USER: ${MYSQL_BACKUP_USER:-socialith_backup}
+      MYSQL_BACKUP_PASSWORD: ${MYSQL_BACKUP_PASSWORD:?MYSQL_BACKUP_PASSWORD is required}
+      MYSQL_MIGRATE_USER: ${MYSQL_MIGRATE_USER:-socialith_migrate}
+      MYSQL_MIGRATE_PASSWORD: ${MYSQL_MIGRATE_PASSWORD:?MYSQL_MIGRATE_PASSWORD is required}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - ./scripts:/scripts:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks: [backend]
+
+networks:
+  frontend:
+  backend:
+
+volumes:
+  mysql_data:
+  redis_data:
+  media_data:
+  caddy_data:
+  caddy_config:

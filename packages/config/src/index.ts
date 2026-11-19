@@ -108,12 +108,29 @@ const envSchema = z
     // directory shared by apps/api (upload + static serving) and
     // apps/worker (render output) since both run on the same host today.
     LOCAL_STORAGE_DIR: emptyStringAsUndefined(z.string().optional()),
-    // The externally-reachable origin apps/api serves local media from —
-    // used only to build absolute ContentAsset URLs (e.g.
-    // "http://localhost:4000/media/..."). Defaults to localhost:API_PORT.
+    // The externally-reachable origin of this deployment's API — used to
+    // build absolute ContentAsset URLs (e.g. "https://…/media/…"), which
+    // platforms must be able to fetch, and as the default OAuth redirect
+    // base (resolveOAuthRedirectUri). Defaults to localhost:API_PORT in
+    // development; REQUIRED and non-localhost in production (see
+    // superRefine below) — the apps/worker crash loop and its latent
+    // localhost-media-URL twin both came from this not being enforced.
     API_PUBLIC_URL: emptyStringAsUndefined(z.string().url().optional()),
     // Defaults to relying on FFmpeg being on PATH — set only if it isn't.
     FFMPEG_PATH: z.string().default("ffmpeg"),
+    // Phase 1 scheduling reliability (apps/worker/src/scheduling).
+    // A scheduled item whose time passed by MORE than this many minutes is
+    // held (never auto-published): protects against posting stale content
+    // after an outage, a restored Redis snapshot, or an old seed row.
+    SCHEDULE_STALE_AFTER_MINUTES: z.coerce.number().int().positive().default(30),
+    // How often the DB↔Redis scheduling reconciler runs (it also runs once
+    // at worker start).
+    SCHEDULING_RECONCILE_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
+    // A target stuck in PUBLISHING (no progress) longer than this is
+    // picked up by the reconciler; older than the max age it is failed
+    // instead of republished.
+    PUBLISHING_STUCK_AFTER_MINUTES: z.coerce.number().int().positive().default(20),
+    PUBLISHING_RECOVERY_MAX_AGE_HOURS: z.coerce.number().int().positive().default(24),
     // Phase 08: publishing (apps/worker/src/publishing). App-level OAuth
     // credentials, needed only for refreshing an expired per-account
     // access token (PlatformConnection.encryptedRefreshToken) — a plain
@@ -162,12 +179,28 @@ const envSchema = z
       return;
     }
 
-    const host = safeHostname(env.NEXT_PUBLIC_APP_URL);
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+    if (isLocalHostname(safeHostname(env.NEXT_PUBLIC_APP_URL))) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["NEXT_PUBLIC_APP_URL"],
         message: "NEXT_PUBLIC_APP_URL must not point to localhost in production.",
+      });
+    }
+
+    // Same rule for the API's public origin: every process that builds a
+    // media URL or an OAuth redirect (api AND worker) must be given it.
+    if (!env.API_PUBLIC_URL) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["API_PUBLIC_URL"],
+        message:
+          "API_PUBLIC_URL must be set explicitly in production (media URLs and OAuth redirects are built from it; every service that loads this config needs it, including the worker).",
+      });
+    } else if (isLocalHostname(safeHostname(env.API_PUBLIC_URL))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["API_PUBLIC_URL"],
+        message: "API_PUBLIC_URL must not point to localhost in production.",
       });
     }
   });
@@ -180,22 +213,47 @@ function safeHostname(url: string): string | undefined {
   }
 }
 
+function isLocalHostname(host: string | undefined): boolean {
+  // new URL("http://[::1]").hostname is "[::1]" (brackets kept).
+  return host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "[::1]";
+}
+
 export type Env = z.infer<typeof envSchema>;
+
+export interface EnvIssue {
+  path: string;
+  message: string;
+}
+
+/**
+ * Thrown for any invalid configuration. `issues` is machine-readable so a
+ * process entry point can log one structured line naming every offending
+ * variable (see apps/*\/src/bootstrap.ts) instead of an opaque stack trace.
+ * The message format is unchanged from before this class existed.
+ */
+export class EnvValidationError extends Error {
+  constructor(public readonly issues: EnvIssue[]) {
+    super(`Invalid environment configuration:\n${issues.map((i) => `  - ${i.path}: ${i.message}`).join("\n")}`);
+    this.name = "EnvValidationError";
+  }
+}
+
+/** Pure, uncached validation (what loadEnv wraps) — used directly by tests. */
+export function parseEnv(source: NodeJS.ProcessEnv): Env {
+  const parsed = envSchema.safeParse(source);
+  if (!parsed.success) {
+    throw new EnvValidationError(
+      parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })),
+    );
+  }
+  return parsed.data;
+}
 
 let cachedEnv: Env | undefined;
 
 export function loadEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (cachedEnv) return cachedEnv;
-
-  const parsed = envSchema.safeParse(source);
-  if (!parsed.success) {
-    const issues = parsed.error.issues
-      .map((issue) => `  - ${issue.path.join(".")}: ${issue.message}`)
-      .join("\n");
-    throw new Error(`Invalid environment configuration:\n${issues}`);
-  }
-
-  cachedEnv = parsed.data;
+  cachedEnv = parseEnv(source);
   return cachedEnv;
 }
 

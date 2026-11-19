@@ -21,7 +21,7 @@ export default defineConfig({
     environment: "node",
     globals: false,
     include: ["src/integration/**/*.integration.test.ts"],
-    globalSetup: ["vitest.integration.setup.ts"],
+    globalSetup: ["../../scripts/vitest-mysql-migrate-setup.ts"],
     fileParallelism: false,
     testTimeout: 60_000,
     hookTimeout: 120_000,

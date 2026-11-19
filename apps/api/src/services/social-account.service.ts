@@ -20,6 +20,7 @@ import {
   type ConnectionSummary,
 } from "../repositories/platform-connection.repository.js";
 import { createAuditLog } from "../repositories/audit-log.repository.js";
+import { withUpsertRaceRetry } from "../lib/db-retry.js";
 import type { SafeUser } from "../types/auth.js";
 
 export async function getAccounts(
@@ -121,33 +122,38 @@ export async function connectAccount(actor: SafeUser, input: ConnectAccountInput
   const encryptedAccessToken = encryptToken(input.accessToken, key);
   const encryptedRefreshToken = input.refreshToken ? encryptToken(input.refreshToken, key) : null;
 
-  const account = await prisma.$transaction(async (tx) => {
-    const result = await upsertSocialAccount(
-      {
-        organizationId: actor.organizationId,
-        platform: input.platform,
-        externalAccountId: input.externalAccountId,
-        handle: input.handle,
-        displayName: input.displayName,
-        avatarUrl: input.avatarUrl ?? null,
-        followerCount: input.followerCount ?? null,
-        connectedById: actor.id,
-        providerMetadata: input.providerMetadata as Prisma.InputJsonValue | undefined,
-      },
-      tx,
-    );
-    await upsertPlatformConnection(
-      {
-        socialAccountId: result.id,
-        encryptedAccessToken,
-        encryptedRefreshToken,
-        tokenExpiresAt: input.tokenExpiresAt ?? null,
-        scopes: input.scopes,
-      },
-      tx,
-    );
-    return result;
-  });
+  // The whole transaction is retried from scratch on a lost upsert race
+  // (P2002/P2034): MySQL has no native Prisma upsert, so simultaneous OAuth
+  // callbacks for one external account can collide — see lib/db-retry.ts.
+  const account = await withUpsertRaceRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const result = await upsertSocialAccount(
+        {
+          organizationId: actor.organizationId,
+          platform: input.platform,
+          externalAccountId: input.externalAccountId,
+          handle: input.handle,
+          displayName: input.displayName,
+          avatarUrl: input.avatarUrl ?? null,
+          followerCount: input.followerCount ?? null,
+          connectedById: actor.id,
+          providerMetadata: input.providerMetadata as Prisma.InputJsonValue | undefined,
+        },
+        tx,
+      );
+      await upsertPlatformConnection(
+        {
+          socialAccountId: result.id,
+          encryptedAccessToken,
+          encryptedRefreshToken,
+          tokenExpiresAt: input.tokenExpiresAt ?? null,
+          scopes: input.scopes,
+        },
+        tx,
+      );
+      return result;
+    }),
+  );
 
   await createAuditLog({
     organizationId: actor.organizationId,

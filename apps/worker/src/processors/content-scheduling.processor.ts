@@ -1,18 +1,27 @@
 import { prisma } from "@socialith/database";
+import { loadEnv } from "@socialith/config";
 import type { Job } from "bullmq";
 import type { ContentSchedulingJobData } from "@socialith/types";
 import { logger } from "../logger.js";
 import { enqueuePublishingJob } from "../publishing/enqueue.js";
+import { holdStaleContent } from "../scheduling/hold.js";
+import { classifySchedule, EARLY_FIRE_TOLERANCE_MS } from "../scheduling/policy.js";
 
 /**
  * Fires once a scheduled content item's `scheduledAt` arrives (job
- * enqueued by apps/api/src/lib/queue.ts, delayed to that exact instant).
+ * enqueued by apps/api/src/lib/queue.ts, delayed to that exact instant,
+ * or re-created by the scheduling reconciler).
  * Transitions Content + its SCHEDULED targets out of SCHEDULED — to
  * PUBLISHING when the content actually has something to publish, or
  * straight to FAILED when it doesn't. Phase 08: once targets are
  * PUBLISHING, enqueues one real publishing job per target (see
  * apps/worker/src/publishing/ and processors/publishing.processor.ts) —
  * this function itself still never calls a platform API directly.
+ *
+ * Phase 1 stale guard: a job that fires more than SCHEDULE_STALE_AFTER_MINUTES
+ * after `scheduledAt` (worker was down, Redis restored from an old snapshot,
+ * a leftover job for old seed data) does NOT publish — the content is held
+ * (see scheduling/hold.ts) for a human to decide.
  */
 export async function processContentScheduling(job: Job<ContentSchedulingJobData>): Promise<void> {
   const { contentId } = job.data;
@@ -21,7 +30,9 @@ export async function processContentScheduling(job: Job<ContentSchedulingJobData
     where: { id: contentId },
     select: {
       id: true,
+      organizationId: true,
       status: true,
+      scheduledAt: true,
       _count: { select: { variations: true, assets: true } },
     },
   });
@@ -46,6 +57,37 @@ export async function processContentScheduling(job: Job<ContentSchedulingJobData
       "content-scheduling: content is no longer SCHEDULED, skipping",
     );
     return;
+  }
+
+  if (content.scheduledAt) {
+    const env = loadEnv();
+    const staleAfterMinutes = env.SCHEDULE_STALE_AFTER_MINUTES;
+    const verdict = classifySchedule(content.scheduledAt, new Date(), staleAfterMinutes * 60_000);
+
+    if (verdict.kind === "STALE") {
+      const held = await holdStaleContent(
+        prisma,
+        { id: content.id, organizationId: content.organizationId, scheduledAt: content.scheduledAt },
+        staleAfterMinutes,
+        new Date(),
+      );
+      logger.warn(
+        { contentId, scheduledAt: content.scheduledAt.toISOString(), lateByMinutes: Math.round(verdict.lateByMs / 60_000), held },
+        "content-scheduling: scheduling job fired too late — held, not published",
+      );
+      return;
+    }
+
+    if (verdict.kind === "FUTURE" && verdict.delayMs > EARLY_FIRE_TOLERANCE_MS) {
+      // Rescheduled later after this job was created (or clock skew). Leave
+      // the content SCHEDULED; the reconciler re-creates the job with the
+      // correct delay.
+      logger.warn(
+        { contentId, delayMs: verdict.delayMs },
+        "content-scheduling: job fired before scheduledAt, leaving SCHEDULED for the reconciler",
+      );
+      return;
+    }
   }
 
   const hasPublishableMaterial = content._count.variations > 0 || content._count.assets > 0;

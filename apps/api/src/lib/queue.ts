@@ -3,6 +3,7 @@ import { Queue } from "bullmq";
 import { loadEnv } from "@socialith/config";
 import {
   QUEUE_NAMES,
+  contentSchedulingJobId,
   type ContentSchedulingJobData,
   type ContentGenerationJobData,
   type VideoRenderJobData,
@@ -49,12 +50,10 @@ const analyticsSyncQueue = connection
   ? new Queue<AnalyticsSyncJobData>(QUEUE_NAMES.ANALYTICS_SYNC, { connection })
   : undefined;
 
-/** Deterministic per-content job ID — enqueuing again for the same content
+/** Deterministic per-content job ID (shared with the worker's reconciler via @socialith/types) — enqueuing again for the same content
  * (re-scheduling) removes any prior pending job first, so a content item
  * never ends up with two competing scheduled transitions. */
-function jobIdFor(contentId: string): string {
-  return `content-scheduling-${contentId}`;
-}
+const jobIdFor = contentSchedulingJobId;
 
 /**
  * Enqueues (or re-enqueues) the delayed job that flips this content from

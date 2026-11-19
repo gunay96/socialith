@@ -102,13 +102,26 @@ logical dump in the private backup folder) was **not** modified.
 ## 8. Running the integration tests
 
 ```bash
-docker compose -f docker-compose.mysql-test.yml up -d --wait          # MySQL 8.0 on :3380, 8.4 on :3384 (throwaway, tmpfs)
+docker compose -f docker-compose.mysql-test.yml up -d --wait          # MySQL 8.0 :3380, 8.4 :3384, Redis :6390 (throwaway, tmpfs)
 # PowerShell:  $env:MYSQL_INTEGRATION_URL = "mysql://socialith:it-app-throwaway@127.0.0.1:3384/socialith_it"
-# bash:        export MYSQL_INTEGRATION_URL="mysql://socialith:it-app-throwaway@127.0.0.1:3384/socialith_it"
-pnpm --filter @socialith/api test:mysql                                # applies the migration, then runs 18 tests
+#              $env:REDIS_INTEGRATION_URL = "redis://127.0.0.1:6390"
+# bash:        export MYSQL_INTEGRATION_URL=...  REDIS_INTEGRATION_URL=...
+pnpm --filter @socialith/api test:mysql                                # applies the migration, then 22 API tests
+pnpm --filter @socialith/worker test:integration                       # 18 scheduling tests (real MySQL + real Redis/BullMQ)
 docker compose -f docker-compose.mysql-test.yml down
 ```
-The default `pnpm test` never touches a database and is unaffected.
+The worker suite deletes organizations whose slug starts with `it-` before each test — point it only at a throwaway
+database. The default `pnpm test` never touches a database and is unaffected.
+
+## 8b. Phase 1 additions (branch `phase1-infrastructure`)
+
+- **TD-26 resolved**: `connectAccount` re-runs its transaction on a lost upsert race (P2002/P2034). With retry disabled,
+  9 of 10 simultaneous callbacks failed on MySQL 8.4; with it, 10/10 succeed across 3 rounds on 8.0.46 and 8.4.13.
+- **Scheduling** is verified against real MySQL + Redis (worker suite) and, end to end, in the VPS compose stack.
+- **Server settings are command-line arguments**, not a mounted `.cnf`: `mysqld` ignores a world-writable config file
+  (a Windows bind mount is 0777), which made the first verification run use defaults without any error. Verified in force:
+  `innodb_buffer_pool_size` 1 GiB, `utf8mb4_unicode_ci`, 7-day binlog, slow log on, strict `sql_mode`.
+- Production accounts: DML-only app user, DDL migrate user (also scoped to `<db>_restore_check`), read-only backup user — see `infra/vps/mysql/initdb/`.
 
 ## 9. Rollback
 

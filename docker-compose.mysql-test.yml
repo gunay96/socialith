@@ -42,3 +42,17 @@ services:
     image: mysql:8.4
     ports:
       - "127.0.0.1:3384:3306"
+
+  # Real Redis for the worker's scheduling integration tests
+  # (apps/worker/src/integration). Throwaway: no persistence, localhost only.
+  redis:
+    image: redis:7-alpine
+    tmpfs:
+      - /data
+    ports:
+      - "127.0.0.1:6390:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

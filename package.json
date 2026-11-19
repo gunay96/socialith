@@ -13,6 +13,8 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:integration": "pnpm --filter @socialith/api test:mysql && pnpm --filter @socialith/worker test:integration",
+    "check:hygiene": "node scripts/ci/check-repo-hygiene.mjs --history",
     "clean": "turbo run clean && rm -rf node_modules",
     "db:generate": "pnpm --filter @socialith/database generate",
     "db:migrate": "pnpm --filter @socialith/database migrate",
