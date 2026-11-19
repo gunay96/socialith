@@ -40,4 +40,4 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app /app
 EXPOSE 4100
-CMD ["node", "apps/worker/dist/index.js"]
+CMD ["node", "apps/worker/dist/bootstrap.js"]
