@@ -11,6 +11,8 @@ reference, outside CI).
 - Every value in the workflow is a throwaway for databases that live only for the job, on the runner's loopback
   interface (`it-app-throwaway`, `ci-only-placeholder-secret-not-for-production`, `abab…`). They are the same values
   already committed in `docker-compose.mysql-test.yml`, and are allow-listed (narrowly) in the secret scanner.
+- The pnpm version comes only from the root `package.json` `packageManager` field (`pnpm@9.0.0`); the
+  `pnpm/action-setup` step must **not** also set `version:` (it fails with "Multiple versions of pnpm specified").
 - Third-party actions are the official `actions/*` and `pnpm/action-setup`, pinned to a major version.
 
 ## Jobs
