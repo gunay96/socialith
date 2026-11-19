@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 // Phase 01 scope: apps/worker has no test files yet (see
 // docs/architecture.md — it only ships a smoke-test queue/processor, no
@@ -14,5 +14,7 @@ export default defineConfig({
     environment: "node",
     globals: false,
     passWithNoTests: true,
+    // Real MySQL/Redis tests run only via vitest.integration.config.ts.
+    exclude: [...configDefaults.exclude, "src/integration/**"],
   },
 });
