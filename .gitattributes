@@ -1,0 +1,12 @@
+# Normalize line endings in the repository (repo-side LF); the working tree
+# follows each developer's core.autocrlf. Keeps Docker/Linux shell scripts and
+# lockfiles stable when the project is edited on Windows.
+* text=auto
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary

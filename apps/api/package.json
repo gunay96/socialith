@@ -1,0 +1,49 @@
+{
+  "name": "@socialith/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@socialith/auth": "workspace:*",
+    "@socialith/config": "workspace:*",
+    "@socialith/database": "workspace:*",
+    "@socialith/types": "workspace:*",
+    "@socialith/video-engine": "workspace:*",
+    "bullmq": "^5.12.0",
+    "connect-redis": "^7.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.19.0",
+    "express-rate-limit": "^7.4.0",
+    "express-session": "^1.18.0",
+    "helmet": "^7.1.0",
+    "ioredis": "^5.4.0",
+    "multer": "^2.4.0",
+    "pino": "^9.3.0",
+    "pino-http": "^10.2.0",
+    "rate-limit-redis": "^4.2.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/express-session": "^1.18.0",
+    "@types/multer": "^1.4.11",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "vite-tsconfig-paths": "^4.3.2",
+    "supertest": "^7.0.0",
+    "@types/supertest": "^6.0.2",
+    "pino-pretty": "^11.2.0"
+  }
+}

@@ -1,0 +1,16 @@
+# Overlay for testing the PRODUCTION Docker images (docker-compose.prod.yml)
+# against localhost, without a real domain — @socialith/config correctly
+# refuses to boot with NODE_ENV=production and a localhost
+# NEXT_PUBLIC_APP_URL (a real safety check, not something to weaken for a
+# real deployment). This overlay only relaxes that for a genuine
+# real-Docker-images-on-localhost verification run; a real deployment
+# never uses this file.
+#
+# Usage: docker compose -f docker-compose.prod.yml -f docker-compose.prod.local-test.yml --env-file .env up -d --build
+services:
+  api:
+    environment:
+      NODE_ENV: development
+  worker:
+    environment:
+      NODE_ENV: development

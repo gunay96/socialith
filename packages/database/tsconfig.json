@@ -1,0 +1,16 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Used by `pnpm typecheck` (covers prisma/seed.ts too) and `tsx` —
+    // no "rootDir"/"outDir" here since this config never emits; see
+    // tsconfig.build.json for the real build. Resolves @socialith/auth
+    // straight to source so typecheck never requires that package's
+    // dist/ to exist first. Does not affect emitted JS — see
+    // apps/api/tsconfig.json for the full explanation.
+    "types": ["node"],
+    "paths": {
+      "@socialith/auth": ["../auth/src/index.ts"]
+    }
+  },
+  "include": ["src", "prisma/seed.ts"]
+}

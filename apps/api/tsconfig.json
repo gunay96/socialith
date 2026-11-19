@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // Used by `pnpm typecheck` and `tsx watch` (dev) — no "rootDir"/
+    // "outDir" here on purpose (no emit happens through this config; see
+    // tsconfig.build.json for the real build). Resolves @socialith/*
+    // workspace imports straight to source, so typecheck/dev never
+    // require those packages' dist/ output to exist first. This does
+    // NOT affect what gets compiled into dist/ — TS "paths" only changes
+    // module *resolution*, it never rewrites emitted import specifiers.
+    // See docs/architecture.md "Production package resolution".
+    "paths": {
+      "@socialith/auth": ["../../packages/auth/src/index.ts"],
+      "@socialith/config": ["../../packages/config/src/index.ts"],
+      "@socialith/database": ["../../packages/database/src/index.ts"],
+      "@socialith/types": ["../../packages/types/src/index.ts"],
+      "@socialith/video-engine": ["../../packages/video-engine/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

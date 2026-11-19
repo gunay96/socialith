@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+dist/
+build/
+out/
+
+# env — every variant is ignored; only the placeholder example is tracked
+.env
+.env.*
+!.env.example
+
+# turbo
+.turbo/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# testing
+coverage/
+
+# misc
+.DS_Store
+*.tsbuildinfo
+
+# prisma
+packages/database/prisma/migrations/dev/
+
+# IDE
+.vscode/
+.idea/
+
+# Not part of the Socialith application (separate, unrelated side projects
+# that happen to live in this folder) — keep them out of this repository.
+/alroca-intro/
+/colleb-post/
+
+# Generated deployment artifacts (rebuilt from source; zips are not source)
+/deploy-clean/
+/deploy/
+*.zip
+
+# Local tool config and backups
+.claude/
+/backups/
+*.sql.gz
+*.dump

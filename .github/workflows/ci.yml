@@ -1,0 +1,80 @@
+﻿name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  DATABASE_URL: "postgresql://socialith:socialith@localhost:5432/socialith?schema=public"
+  REDIS_URL: "redis://localhost:6379"
+  SESSION_SECRET: "ci-only-placeholder-secret-not-for-production"
+  # 64 hex chars (32 bytes) — CI-only placeholder, same status as
+  # SESSION_SECRET above. Required by @socialith/config since Phase 04
+  # (packages/auth/src/token-crypto.ts).
+  TOKEN_ENCRYPTION_KEY: "abababababababababababababababababababababababababababababababab"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: socialith
+          POSTGRES_PASSWORD: socialith
+          POSTGRES_DB: socialith
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U socialith -d socialith"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
+
+      - name: Run database migrations
+        run: pnpm --filter @socialith/database exec prisma migrate deploy
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

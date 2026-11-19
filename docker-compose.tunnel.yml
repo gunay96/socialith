@@ -1,0 +1,60 @@
+# Local Cloudflare Tunnel demo overlay — exposes the SAME real production
+# images (docker-compose.prod.yml) to the internet via a temporary,
+# random *.trycloudflare.com HTTPS URL, entirely from this machine. No
+# VPS, no DNS change, no touching the real socialith.co domain — the
+# tunnel URL is unrelated to it and expires when cloudflared stops.
+#
+# api/web no longer publish host ports directly (only nginx does) — the
+# browser only ever reaches nginx, exactly like the real production
+# topology's single entry point.
+#
+# Usage:
+#   1. First `up` (no TUNNEL_URL known yet):
+#      docker compose -f docker-compose.prod.yml -f docker-compose.tunnel.yml --env-file .env up -d --build
+#   2. Read the assigned URL:
+#      docker compose -f docker-compose.prod.yml -f docker-compose.tunnel.yml logs cloudflared | grep trycloudflare
+#   3. Write it to .env.tunnel as TUNNEL_URL=https://<...>.trycloudflare.com
+#      and re-run `up -d` (recreates only the api container, no rebuild)
+#      with --env-file .env --env-file .env.tunnel — see docs/demo-tunnel.md.
+name: socialith-prod
+
+services:
+  api:
+    ports: !reset []
+    environment:
+      # Only takes effect once .env.tunnel's TUNNEL_URL is passed via a
+      # second --env-file — see docs/demo-tunnel.md. Falls back to the
+      # local nginx port so the api container still boots cleanly before
+      # the tunnel URL is known.
+      NEXT_PUBLIC_APP_URL: ${TUNNEL_URL:-http://localhost:8080}
+      API_PUBLIC_URL: ${TUNNEL_URL:-http://localhost:8080}
+
+  web:
+    # Overrides the base file's ${NEXT_PUBLIC_API_URL:-} build arg, which
+    # otherwise picks up .env's real NEXT_PUBLIC_API_URL="http://localhost:4000"
+    # (meant for plain `pnpm dev`) and bakes it into the Next.js build,
+    # breaking apps/web/src/lib/api.ts's same-origin fallback under the
+    # tunnel. Forcing it empty here makes the browser call the tunnel's
+    # own origin instead.
+    build:
+      args:
+        NEXT_PUBLIC_API_URL: ""
+    ports: !reset []
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./nginx.tunnel.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+      - web
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --url http://nginx:80
+    depends_on:
+      - nginx

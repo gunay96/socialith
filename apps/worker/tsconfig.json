@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // Used by `pnpm typecheck` and `tsx watch` (dev) only — see
+    // apps/api/tsconfig.json for the full explanation and
+    // tsconfig.build.json for the real build. No "rootDir"/"outDir"
+    // here since this config never emits.
+    "paths": {
+      "@socialith/auth": ["../../packages/auth/src/index.ts"],
+      "@socialith/config": ["../../packages/config/src/index.ts"],
+      "@socialith/database": ["../../packages/database/src/index.ts"],
+      "@socialith/types": ["../../packages/types/src/index.ts"],
+      "@socialith/video-engine": ["../../packages/video-engine/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

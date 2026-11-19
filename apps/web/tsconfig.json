@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "incremental": true,
+    "noEmit": true,
+    "plugins": [{ "name": "next" }],
+    // "@/*" is the app's own internal alias. "@socialith/types" is
+    // type-check/dev-time only, same reasoning as apps/api/tsconfig.json
+    // — keeps `tsc --noEmit` (and Next's dev/build resolution, which
+    // also reads tsconfig paths) working without requiring
+    // packages/types/dist to exist first.
+    "paths": { "@/*": ["./src/*"], "@socialith/types": ["../../packages/types/src/index.ts"] }
+  },
+  "include": ["next-env.d.ts", "src", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

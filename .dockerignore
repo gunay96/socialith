@@ -1,0 +1,30 @@
+# Critical: without this, `COPY . .` in every Dockerfile's build stage
+# overwrites the deps stage's correctly-installed Linux node_modules with
+# whatever's in the host's own (host-OS-native-binary, non-Linux)
+# node_modules — this was a real, verified build failure during this
+# phase's Docker E2E pass ("Cannot find module .../prisma/build/index.js"),
+# not a hypothetical concern.
+node_modules
+**/node_modules
+
+# Build output — each Dockerfile's own build stage regenerates these.
+dist
+**/dist
+.next
+**/.next
+.turbo
+**/.turbo
+*.tsbuildinfo
+
+# Never send real secrets into a build context/image layer.
+.env
+.env.local
+.env.*.local
+
+.git
+.gitignore
+.dockerignore
+
+coverage
+**/coverage
+*.log

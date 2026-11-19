@@ -1,0 +1,747 @@
+// Socialith — Prisma schema
+// Phase 01 scope: foundation (organizations, users, audit_logs).
+// Phase 02 scope: authentication + team management (invitations, password
+// resets, and User.sessionVersion for server-side session invalidation).
+// Phase 04 scope: connected social accounts (SocialAccount,
+// PlatformConnection) — the foundation later publishing/content/analytics
+// phases attach to. No real OAuth yet; see SocialAccount's own comment.
+// Phase 05 scope: content & campaign operations (Campaign, Content,
+// ContentVariation, ContentAsset, ContentTarget) — organizing, targeting,
+// and scheduling content against Phase 04's SocialAccount rows. No real
+// video generation/publishing yet; see Content's own comment.
+// Remaining entities are introduced in the phases that own them per
+// docs/architecture.md so each phase ships a reviewable, working slice.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Shared-hosting/demo-lite tier: Güzel Hosting's shared cPanel plan has
+  // no PostgreSQL, only MySQL — verified directly against the real cPanel
+  // screen, not assumed. Every feature this schema uses (enums, Json,
+  // cuid() defaults, composite unique/index, cascading FKs) is portable to
+  // MySQL 5.7.7+/8.0 without loss; the one real incompatibility
+  // (PlatformConnection.scopes, previously a Postgres-native String[]) is
+  // fixed below — MySQL has no array column type. See
+  // docs/deployment-guzelhosting-shared.md for the full migration report.
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DISABLED
+  // Soft-removed from the organization (Phase 02B: DELETE
+  // /api/team/:userId). Not a hard row delete — invitations.invited_by_id
+  // has ON DELETE RESTRICT, so a user who has ever sent an invitation
+  // can't be hard-deleted without also deleting those invitation
+  // records, which would destroy audit history. A REMOVED user fails
+  // requireAuth's `status === "ACTIVE"` check exactly like DISABLED, is
+  // excluded from the team list, and — unlike DISABLED — frees their
+  // email up for a fresh invitation, which reactivates this same row
+  // rather than trying to create a second User with the same email
+  // (blocked by the unique constraint on `email`).
+  REMOVED
+}
+
+model Organization {
+  id        String             @id @default(cuid())
+  name      String
+  slug      String             @unique
+  status    OrganizationStatus @default(ACTIVE)
+  timezone  String             @default("Europe/Istanbul")
+  language  String             @default("tr")
+  createdAt DateTime           @map("created_at") @default(now())
+  updatedAt DateTime           @map("updated_at") @updatedAt
+
+  users          User[]
+  auditLogs      AuditLog[]
+  invitations    Invitation[]
+  socialAccounts SocialAccount[]
+  campaigns      Campaign[]
+  content        Content[]
+  generationJobs ContentGenerationJob[]
+  renderJobs     VideoRenderJob[]
+  publishAttempts PublishAttempt[]
+  sounds          Sound[]
+  metricsSnapshots PostMetricsSnapshot[]
+
+  @@map("organizations")
+}
+
+model User {
+  id             String     @id @default(cuid())
+  organizationId String     @map("organization_id")
+  name           String
+  email          String     @unique
+  passwordHash   String     @map("password_hash")
+  role           UserRole   @default(VIEWER)
+  status         UserStatus @default(INVITED)
+  lastLoginAt    DateTime?  @map("last_login_at")
+  // Bumped on password reset (and available for a future "log out
+  // everywhere" action) to invalidate every existing session for this
+  // user without needing to enumerate/delete them individually — the
+  // session middleware compares the value embedded in the session
+  // against this column on every request.
+  sessionVersion Int        @default(0) @map("session_version")
+  createdAt      DateTime   @map("created_at") @default(now())
+  updatedAt      DateTime   @map("updated_at") @updatedAt
+
+  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs            AuditLog[]
+  sentInvitations      Invitation[]          @relation("InvitedBy")
+  passwordResetTokens  PasswordResetToken[]
+  connectedAccounts    SocialAccount[]
+  createdCampaigns     Campaign[]
+  createdContent       Content[]
+  requestedGenerationJobs ContentGenerationJob[]
+  requestedRenderJobs     VideoRenderJob[]
+  createdSounds           Sound[]
+
+  @@index([organizationId])
+  @@map("users")
+}
+
+model AuditLog {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  userId         String?  @map("user_id")
+  action         String
+  targetType     String?  @map("target_type")
+  targetId       String?  @map("target_id")
+  metadataJson   Json?    @map("metadata_json")
+  createdAt      DateTime @map("created_at") @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// Invite-only account creation (spec §9/§53 Phase 02: "public registration
+// OLMAYACAK"). The raw token is emailed once and never stored — only its
+// SHA-256 hash is, so a database read can't be replayed as a valid link.
+model Invitation {
+  id             String    @id @default(cuid())
+  organizationId String    @map("organization_id")
+  email          String
+  role           UserRole
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at")
+  acceptedAt     DateTime? @map("accepted_at")
+  invitedById    String    @map("invited_by_id")
+  createdAt      DateTime  @map("created_at") @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy    User         @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  // NOTE: "one outstanding (unaccepted) invitation per email per
+  // organization" is a business rule, not a database constraint — there
+  // is no unique index enforcing it here (only the plain lookup indexes
+  // below). It must be enforced in the application/service layer (e.g.
+  // the invite-creation service checks for an existing unaccepted,
+  // unexpired invitation for that email+organization before creating a
+  // new one, and expires/replaces it rather than allowing duplicates).
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitations")
+}
+
+// Single-use, short-lived password reset tokens. Same "hash only" rule as
+// invitations, plus `usedAt` to make reuse of an already-consumed token
+// impossible even before it expires.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @map("created_at") @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+enum Platform {
+  TIKTOK
+  INSTAGRAM
+  YOUTUBE
+}
+
+enum SocialAccountStatus {
+  CONNECTED
+  DISCONNECTED
+  EXPIRED
+  ERROR
+}
+
+// Phase 04 foundation for the eventual content-generation → publishing →
+// analytics pipeline (docs/architecture.md's "social_accounts",
+// "platform_connections"). No real TikTok/Instagram/YouTube OAuth exists
+// yet — rows are created by packages/database/prisma/seed.ts only, as a
+// clearly-labeled dev-only stand-in (same pattern as the dev owner seed),
+// until the real OAuth connect flow lands in a later phase.
+//
+// externalAccountId uniqueness is scoped to (organizationId, platform),
+// NOT global: a real social account can legitimately move from one
+// Socialith organization to another over time (e.g. an artist changes
+// agencies) — a global unique constraint would permanently lock the new
+// organization out until the old one manually disconnects, which isn't
+// this schema's call to make. Per-organization uniqueness still prevents
+// the one real duplicate-connection case that matters: the same org
+// connecting the same external account twice.
+model SocialAccount {
+  id                String              @id @default(cuid())
+  organizationId    String              @map("organization_id")
+  platform          Platform
+  externalAccountId String              @map("external_account_id")
+  handle            String
+  displayName       String              @map("display_name")
+  // @db.Text: MySQL's default VARCHAR(191) is a real truncation risk for
+  // a CDN avatar URL carrying a signed query string — Postgres's plain
+  // `text` never had this cap. Same reasoning for every other
+  // URL/free-text field in this schema switched to @db.Text below (see
+  // this migration's report for the full list and why).
+  avatarUrl         String?             @map("avatar_url") @db.Text
+  status            SocialAccountStatus @default(CONNECTED)
+  followerCount     Int?                @map("follower_count")
+  lastSyncedAt      DateTime?           @map("last_synced_at")
+  // Set alongside `status: ERROR` so a broken connection is
+  // human-readable (in the UI) and machine-actionable (future
+  // refresh/publish retry logic) without a separate events table.
+  lastErrorMessage  String?             @map("last_error_message") @db.Text
+  // Escape hatch for provider-specific profile fields that don't warrant
+  // their own typed column (bio, verified badge, profile URL, …) — same
+  // role AuditLog.metadataJson already plays in this schema.
+  providerMetadata  Json?               @map("provider_metadata")
+  connectedById     String?             @map("connected_by_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectedBy         User?               @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  platformConnection  PlatformConnection?
+  contentTargets      ContentTarget[]
+
+  // Composite unique — see the model comment above for why this is
+  // per-organization, not global.
+  @@unique([organizationId, platform, externalAccountId])
+  // Covers the two query shapes the accounts list/dashboard actually
+  // runs: status-filtered browsing and the default chronological,
+  // paginated listing. Not indexing `platform` on its own — the unique
+  // constraint above already covers organizationId+platform lookups, and
+  // per-organization row counts (low thousands) don't justify a third
+  // index for it yet.
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("social_accounts")
+}
+
+// Credential vault — deliberately a separate table/model from
+// SocialAccount so the repository that lists/returns accounts never even
+// has a path to select a token column by accident (see
+// repositories/social-account.repository.ts vs.
+// repositories/platform-connection.repository.ts). Access/refresh tokens
+// are encrypted at rest (packages/auth/src/token-crypto.ts, AES-256-GCM)
+// — this table never holds plaintext credentials, and no controller
+// serializes it into an API response.
+//
+// One row per SocialAccount (the current, active credential only) — not
+// a history of past tokens. Keeping expired/rotated ciphertext around
+// serves no product purpose and is a pure liability; "was this ever
+// refreshed" is answered by `lastRefreshedAt`, and a future audit-log
+// event (TOKEN_REFRESHED) can capture the *that it happened* signal
+// without retaining the *old credential material itself*.
+model PlatformConnection {
+  id                    String    @id @default(cuid())
+  socialAccountId       String    @unique @map("social_account_id")
+  // Nullable: cleared (set to null) on disconnect, alongside
+  // `revokedAt` — a disconnected account has no business holding onto a
+  // still-technically-valid OAuth credential. See
+  // services/social-account.service.ts's disconnectAccount.
+  // @db.Text: CRITICAL, not cosmetic — base64(iv + authTag + ciphertext)
+  // routinely exceeds MySQL's default VARCHAR(191) for real OAuth tokens
+  // (Google/YouTube tokens especially), which would silently truncate
+  // (or hard-fail under strict SQL mode) and corrupt the stored
+  // credential. Verified against packages/auth/src/token-crypto.ts's
+  // actual encoding.
+  encryptedAccessToken  String?   @map("encrypted_access_token") @db.Text
+  encryptedRefreshToken String?   @map("encrypted_refresh_token") @db.Text
+  tokenExpiresAt        DateTime? @map("token_expires_at")
+  // MySQL has no native array column type (Postgres String[] isn't
+  // portable) — stored as a JSON array instead. No @default: MySQL's
+  // JSON columns don't support column defaults the way Postgres jsonb
+  // does (Prisma silently drops one here if given) — harmless, every
+  // writer in apps/api/src/repositories/platform-connection.repository.ts
+  // always supplies scopes explicitly. Every other consumer of this
+  // field still sees a plain string[], unchanged.
+  scopes                Json
+  // Connection-specific provider extras (token_type, provider API
+  // version, …) — distinct from SocialAccount.providerMetadata, which is
+  // public-ish profile trivia, not credential/connection bookkeeping.
+  providerMetadata      Json?     @map("provider_metadata")
+  lastRefreshedAt       DateTime? @map("last_refreshed_at")
+  revokedAt             DateTime? @map("revoked_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  socialAccount SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  // Phase 10: the exact query apps/worker's token-refresh-scan processor
+  // runs ("find active connections whose token expires soon") — a
+  // partial-looking but real index (Postgres doesn't need a WHERE clause
+  // here since NULL tokenExpiresAt rows are cheap to skip via the range
+  // scan itself).
+  @@index([tokenExpiresAt])
+  @@map("platform_connections")
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+}
+
+// Phase 05 — a lightweight organizing container for Content; not a
+// marketing-automation "campaign" with its own budget/targeting engine.
+// content.campaign_id is nullable (see Content below), so content never
+// *requires* one.
+model Campaign {
+  id             String         @id @default(cuid())
+  organizationId String         @map("organization_id")
+  name           String
+  description    String?        @db.Text
+  status         CampaignStatus @default(DRAFT)
+  startAt        DateTime?      @map("start_at")
+  endAt          DateTime?      @map("end_at")
+  createdById    String?        @map("created_by_id")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  content      Content[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("campaigns")
+}
+
+enum ContentStatus {
+  DRAFT
+  GENERATED
+  READY
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+enum AssetType {
+  IMAGE
+  VIDEO
+  AUDIO
+  THUMBNAIL
+}
+
+enum ContentTargetStatus {
+  PENDING
+  SCHEDULED
+  PUBLISHING
+  PUBLISHED
+  FAILED
+}
+
+// Phase 05 foundation for the eventual video-generation → publishing →
+// analytics pipeline (docs/architecture.md's "content"). This phase only
+// ever sets status through DRAFT → READY → SCHEDULED and populates
+// ContentVariation/ContentAsset with plain references — GENERATED (after
+// real video rendering), PUBLISHING/PUBLISHED/FAILED (aggregated from
+// ContentTarget outcomes) are set by the phases that implement those
+// steps. No real video rendering or platform publishing happens here.
+model Content {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  campaignId     String?       @map("campaign_id")
+  // Phase 09: optional music-seeding sound reference — see Sound below.
+  // One Content references at most one Sound; the same Sound is meant to
+  // be reused across many Content rows (and their differing variations/
+  // target groups), never the reverse.
+  soundId        String?       @map("sound_id")
+  caption        String?       @db.Text
+  status         ContentStatus @default(DRAFT)
+  // The content-level intended publish time — copied onto each
+  // ContentTarget when POST /api/content/:id/schedule runs (a target can
+  // still carry its own value if a later phase needs per-account
+  // offsets; Phase 05 always sets them equal).
+  scheduledAt    DateTime?     @map("scheduled_at")
+  createdById    String?       @map("created_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign     Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  sound        Sound?             @relation(fields: [soundId], references: [id], onDelete: SetNull)
+  createdBy    User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  variations   ContentVariation[]
+  assets       ContentAsset[]
+  targets      ContentTarget[]
+  generationJobs ContentGenerationJob[]
+  renderJobs     VideoRenderJob[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, campaignId])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, soundId])
+  @@map("content")
+}
+
+enum SoundStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// Phase 09 — a reusable, organization-scoped reference to a platform
+// sound/music track for music-seeding campaigns (spec: "Alroca - X" used
+// across hundreds of TikTok accounts). Deliberately reference metadata
+// only — title/artist/externalSoundId/soundUrl/artworkUrl — never an
+// actual audio file: TikTok's official Content Posting API has no field
+// to attach an existing sound_id/music_id to an uploaded video (verified
+// against developers.tiktok.com — see
+// apps/worker/src/publishing/providers/tiktok.provider.ts's comment), and
+// TikTok exposes no official endpoint to fetch a sound's audio bytes
+// either, so there is nothing real to store or mix in beyond this
+// reference data. The same Sound row is reused across many Content rows
+// (`content` below) — that reuse is the whole point of a library rather
+// than a free-text field on Content.
+model Sound {
+  id               String      @id @default(cuid())
+  organizationId   String      @map("organization_id")
+  title            String
+  artist           String?
+  platform         Platform
+  externalSoundId  String?     @map("external_sound_id")
+  soundUrl         String?     @map("sound_url") @db.Text
+  artworkUrl       String?     @map("artwork_url") @db.Text
+  status           SoundStatus @default(ACTIVE)
+  providerMetadata Json?       @map("provider_metadata")
+  createdById      String?     @map("created_by_id")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  content      Content[]
+
+  @@index([organizationId, platform])
+  @@index([organizationId, status])
+  @@index([organizationId, title])
+  @@map("sounds")
+}
+
+// Per-platform override of the base Content (spec example: Instagram
+// caption+hashtags, TikTok caption+metadata, YouTube title+description).
+// Scoped to `platform`, not to an individual SocialAccount — at 1000+
+// target accounts, a per-account variation would mean thousands of rows
+// per piece of content for no real benefit; every account on the same
+// platform reuses the one variation for that platform. Phase 07 is
+// expected to populate `title`/`caption`/`metadata` here (e.g. AI-written
+// captions), not to introduce a new table.
+model ContentVariation {
+  id        String   @id @default(cuid())
+  contentId String   @map("content_id")
+  platform  Platform
+  // YouTube-style title, unused by platforms that don't have one — kept
+  // nullable rather than forcing every platform to populate it.
+  title     String?
+  caption   String?  @db.Text
+  // Free-form per-platform extras (hashtags, TikTok-specific fields,
+  // thumbnail choice, …) — same escape-hatch role as
+  // SocialAccount.providerMetadata.
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@unique([contentId, platform])
+  @@map("content_variations")
+}
+
+// A stable reference/ID for media that a later phase's real
+// video-generation or upload pipeline produces — this table stores no
+// actual file bytes and does not implement upload/storage/rendering
+// itself (see Content's comment). `platform` is nullable: null means
+// "shared across every variation" (e.g. the source video), set means
+// "specific to that platform's variation" (e.g. a YouTube-only
+// thumbnail).
+model ContentAsset {
+  id        String    @id @default(cuid())
+  contentId String    @map("content_id")
+  type      AssetType
+  platform  Platform?
+  url       String    @db.Text
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  renderJobsAsSource VideoRenderJob[] @relation("VideoRenderSourceAsset")
+  renderJobsAsResult VideoRenderJob[] @relation("VideoRenderResultAsset")
+
+  @@index([contentId])
+  @@map("content_assets")
+}
+
+// The Content × SocialAccount join — this is what lets one piece of
+// content target hundreds/thousands of accounts (spec: "Campaign A → 300
+// Instagram + 400 TikTok + 100 YouTube") as real, queryable rows instead
+// of a JSON blob. Deliberately the exact shape Phase 08's publishing
+// worker will consume: `(status, scheduledAt)` per target account, ready
+// to become "find all SCHEDULED rows whose scheduledAt has passed" — the
+// index below is chosen for exactly that future query, even though
+// nothing in Phase 05 runs it yet (no real publishing here).
+model ContentTarget {
+  id              String              @id @default(cuid())
+  contentId       String              @map("content_id")
+  socialAccountId String              @map("social_account_id")
+  status          ContentTargetStatus @default(PENDING)
+  scheduledAt     DateTime?           @map("scheduled_at")
+  publishedAt     DateTime?           @map("published_at")
+  // Populated once real publishing exists (Phase 08) — e.g. the
+  // provider's post ID, so analytics (Phase 09) can look it up.
+  externalPostId  String?             @map("external_post_id")
+  // A user-facing link to the live post, when the platform's publish
+  // response includes or implies one (e.g. YouTube: derivable from the
+  // video ID; Instagram/TikTok: not always returned synchronously).
+  externalPostUrl String?             @map("external_post_url") @db.Text
+  errorMessage    String?             @map("error_message") @db.Text
+  // Phase 10 TikTok-review hardening: a real, honest caveat for a target
+  // whose provider reported COMPLETE but that doesn't mean "live" — e.g.
+  // TikTok's real Upload/Inbox flow (video.upload scope) delivers to the
+  // connected account's TikTok inbox, not to public view; the user must
+  // finish the post manually in the TikTok app. Null for a target whose
+  // PUBLISHED status genuinely means live/public. See
+  // apps/worker/src/publishing/types.ts's PublishStatusResult.deliveryNote.
+  deliveryNote    String?             @map("delivery_note") @db.Text
+  // Denormalized running count of PublishAttempt rows below — same
+  // pattern as ContentGenerationJob/VideoRenderJob.attempts (Phase 07):
+  // cheap idempotency/backoff checks without a COUNT query. The
+  // individual attempts themselves (with their own error/response
+  // detail) live in PublishAttempt, not duplicated here.
+  attemptCount    Int                 @default(0) @map("attempt_count")
+  // Phase 10: stamped at the *start* of every analytics-sync attempt
+  // (success or failure) — what the analytics-sync-scan processor orders
+  // by to spread out real re-syncs instead of hammering the same targets
+  // every scan cycle. Distinct from PostMetricsSnapshot.fetchedAt, which
+  // only exists on a successful sync.
+  lastAnalyticsSyncAt DateTime?       @map("last_analytics_sync_at")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  content       Content          @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  socialAccount SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  publishAttempts PublishAttempt[]
+  metricsSnapshots PostMetricsSnapshot[]
+
+  @@unique([contentId, socialAccountId])
+  @@index([socialAccountId])
+  @@index([status, scheduledAt])
+  @@index([status, lastAnalyticsSyncAt])
+  @@map("content_targets")
+}
+
+enum PublishAttemptStatus {
+  SUCCEEDED
+  FAILED
+}
+
+// One immutable row per real publish attempt against a platform API —
+// the audit trail ContentTarget itself can't hold (it only carries the
+// *current* status/error, overwritten on every attempt). Phase 09
+// analytics reads this the same way it reads ContentTarget: scoped by
+// organizationId directly, never inferred through a join. `organizationId`
+// is denormalized from Content, matching how AuditLog/Content/ContentAsset
+// already carry it directly rather than requiring one.
+model PublishAttempt {
+  id              String                @id @default(cuid())
+  organizationId  String                @map("organization_id")
+  contentTargetId String                @map("content_target_id")
+  attemptNumber   Int                   @map("attempt_number")
+  status          PublishAttemptStatus
+  // Machine-readable classification (e.g. "CONFIGURATION_ERROR",
+  // "AUTH_ERROR", "RATE_LIMITED", "PLATFORM_ERROR", "NETWORK_ERROR") —
+  // see apps/worker/src/publishing/types.ts's PublishError. Null on a
+  // SUCCEEDED attempt.
+  errorCode       String?               @map("error_code")
+  errorMessage    String?               @map("error_message") @db.Text
+  httpStatusCode  Int?                  @map("http_status_code")
+  // Whether this failure was classified as retryable at the time (5xx/
+  // network/rate-limit) vs permanent (4xx auth/content/config) — kept
+  // even though ContentTarget's own retry loop has already acted on it,
+  // so a later audit doesn't have to re-derive the classification from
+  // errorCode/httpStatusCode alone.
+  retryable       Boolean?
+  externalPostId  String?               @map("external_post_id")
+  externalPostUrl String?               @map("external_post_url") @db.Text
+  // Structured, safe response metadata only (provider request id, rate-
+  // limit headers, …) — never the raw response body verbatim, and never
+  // any credential. See apps/worker/src/publishing/types.ts.
+  responseMetadata Json?                @map("response_metadata")
+  rateLimitResetAt DateTime?            @map("rate_limit_reset_at")
+  startedAt       DateTime              @map("started_at")
+  completedAt     DateTime              @map("completed_at")
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contentTarget ContentTarget @relation(fields: [contentTargetId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@index([contentTargetId, attemptNumber])
+  @@map("publish_attempts")
+}
+
+enum ContentGenerationStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+enum VideoRenderStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+}
+
+// Extend as real video-engine operations are added (crop, subtitles,
+// intro/outro) — Phase 07 implements THUMBNAIL only (see
+// packages/video-engine). A single-value enum today, kept as an enum
+// rather than a free string so an invalid operation can never reach a
+// job row.
+enum VideoRenderOperation {
+  THUMBNAIL
+}
+
+// One row per AI caption/hashtag generation request — the DB-persisted
+// source of truth the API exposes to the frontend (org-scoped, RBAC'd),
+// while BullMQ (packages/types QUEUE_NAMES.CONTENT_GENERATION) is the
+// execution engine. `platform` null means "generate Content.caption
+// itself"; set means "generate/update that platform's ContentVariation".
+// Requires apps/worker's AI_PROVIDER_API_KEY to be configured for the
+// job to ever SUCCEED — see apps/worker/src/ai/provider.ts. Without a
+// key, a job legitimately completes as FAILED with a clear
+// "provider not configured" errorMessage rather than a fabricated
+// success (per this phase's explicit "no fake success" rule).
+model ContentGenerationJob {
+  id             String                  @id @default(cuid())
+  organizationId String                  @map("organization_id")
+  contentId      String                  @map("content_id")
+  platform       Platform?
+  status         ContentGenerationStatus @default(PENDING)
+  attempts       Int                     @default(0)
+  errorMessage   String?                 @map("error_message") @db.Text
+  // One of @socialith/types' ERROR_CODES (e.g. CONFIGURATION_ERROR, RATE_LIMITED) — set alongside errorMessage so API/UI can normalize instead of string-matching.
+  errorCode      String?                 @map("error_code")
+  // Real token-usage/cost data from the AI provider's own response, when it returns one — {promptTokens, completionTokens, totalTokens, estimatedCostUsd}. Null when the provider doesn't report usage.
+  usageMetadata  Json?                   @map("usage_metadata")
+  resultVariationId String?              @map("result_variation_id")
+  requestedById  String?                 @map("requested_by_id")
+  startedAt      DateTime?               @map("started_at")
+  completedAt    DateTime?               @map("completed_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  content      Content      @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  requestedBy  User?        @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([contentId, status])
+  @@map("content_generation_jobs")
+}
+
+// One row per FFmpeg render request (packages/video-engine). Unlike
+// content-generation, this needs no external credential — FFmpeg is a
+// real local binary — so this pipeline's SUCCEEDED path is fully
+// exercisable in this environment. `sourceAssetId` is the ContentAsset
+// to render from; `resultAssetId` is populated once a new ContentAsset
+// is created from the render output.
+model VideoRenderJob {
+  id             String               @id @default(cuid())
+  organizationId String               @map("organization_id")
+  contentId      String               @map("content_id")
+  sourceAssetId  String               @map("source_asset_id")
+  operation      VideoRenderOperation
+  status         VideoRenderStatus    @default(PENDING)
+  attempts       Int                  @default(0)
+  errorMessage   String?              @map("error_message") @db.Text
+  // Same purpose as ContentGenerationJob.errorCode — an @socialith/types ERROR_CODES value (e.g. CONFIGURATION_ERROR when FFMPEG_PATH is unusable).
+  errorCode      String?              @map("error_code")
+  resultAssetId  String?              @map("result_asset_id")
+  requestedById  String?              @map("requested_by_id")
+  startedAt      DateTime?            @map("started_at")
+  completedAt    DateTime?            @map("completed_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  content      Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  sourceAsset  ContentAsset  @relation("VideoRenderSourceAsset", fields: [sourceAssetId], references: [id], onDelete: Cascade)
+  resultAsset  ContentAsset? @relation("VideoRenderResultAsset", fields: [resultAssetId], references: [id], onDelete: SetNull)
+  requestedBy  User?         @relation(fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([contentId, status])
+  @@map("video_render_jobs")
+}
+
+// Phase 09 — real per-platform post performance, fetched via each
+// provider's real metrics endpoint (apps/worker/src/analytics/) for a
+// PUBLISHED ContentTarget's externalPostId. Named to match spec §10's
+// original "analytics_snapshots" entity. A *snapshot* series (one row per
+// sync), not a single mutable "current metrics" row, so growth over time
+// is queryable — the same reasoning PublishAttempt uses for its own
+// history vs. ContentTarget's current-state fields. Every field is
+// nullable: a platform whose metrics endpoint doesn't return a given
+// number (e.g. Instagram's basic fields lack shares) simply leaves it
+// null rather than a fabricated 0.
+model PostMetricsSnapshot {
+  id              String   @id @default(cuid())
+  organizationId  String   @map("organization_id")
+  contentTargetId String   @map("content_target_id")
+  platform        Platform
+  viewCount       Int?     @map("view_count")
+  likeCount       Int?     @map("like_count")
+  commentCount    Int?     @map("comment_count")
+  shareCount      Int?     @map("share_count")
+  // Safe structured response only (see PublishAttempt.responseMetadata's
+  // identical reasoning) — never a credential, never an unbounded raw body.
+  raw             Json?
+  fetchedAt       DateTime @default(now()) @map("fetched_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contentTarget ContentTarget @relation(fields: [contentTargetId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, fetchedAt])
+  @@index([contentTargetId, fetchedAt])
+  @@map("post_metrics_snapshots")
+}

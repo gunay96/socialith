@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    // See apps/api/tsconfig.build.json for why this must be reset to {}
+    // for the real build rather than inheriting the sibling-source alias.
+    "paths": {}
+  },
+  "include": ["src"]
+}

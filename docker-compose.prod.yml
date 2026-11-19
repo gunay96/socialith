@@ -1,0 +1,140 @@
+# Production topology: Postgres + Redis + API + worker + web, all in one
+# compose file. `docker-compose.yml` (no suffix) stays dev-only
+# (Postgres + Redis only — apps run via `pnpm dev` against them); this
+# file is the one that actually builds and runs apps/api, apps/worker,
+# apps/web as containers.
+#
+# Real secrets (SESSION_SECRET, TOKEN_ENCRYPTION_KEY, TIKTOK_*, META_*,
+# GOOGLE_*, R2_*, AI_PROVIDER_API_KEY, ...) are read from a real `.env`
+# file at deploy time via `env_file`, never baked into this file or the
+# image — the same non-negotiable rule documented in .env.example.
+#
+# Usage: docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+name: socialith-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-socialith}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required in production}
+      POSTGRES_DB: ${POSTGRES_DB:-socialith}
+    volumes:
+      - socialith_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-socialith} -d ${POSTGRES_DB:-socialith}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - socialith_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      # Overrides whatever DATABASE_URL/REDIS_URL are in .env (those are
+      # meant for `pnpm dev` against the dev-only docker-compose.yml's
+      # containers on localhost) — inside this compose network, the api/
+      # worker containers reach Postgres/Redis by their real service
+      # names below, never "localhost" (that would resolve to the api
+      # container itself, not the postgres/redis containers).
+      DATABASE_URL: postgresql://${POSTGRES_USER:-socialith}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-socialith}?schema=public
+      REDIS_URL: redis://redis:6379
+      # Real bug this fixes: api and worker are SEPARATE containers with
+      # separate filesystems. Without R2 configured (see docs/setup-r2.md),
+      # LocalAssetStorage falls back to local disk — the worker's
+      # video-render output would otherwise land in the worker
+      # container's own filesystem, invisible to the api container's
+      # /media static route that's supposed to serve it (a 404, not a
+      # fabricated failure — but a real one, caught during this review
+      # pass, not hypothetical). A named volume mounted at the same path
+      # in both containers (see the `volumes:` block below) makes local
+      # storage actually shared and durable across redeploys, matching
+      # what R2 gives you for real production but as a same-host fallback.
+      LOCAL_STORAGE_DIR: /app/data/media
+    volumes:
+      - socialith_media_data:/app/data/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-socialith}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-socialith}?schema=public
+      REDIS_URL: redis://redis:6379
+      # Overrides whatever host-specific FFMPEG_PATH is in .env (e.g. a
+      # Windows dev-machine path) — this image installs a real `ffmpeg`
+      # on PATH itself (see apps/worker/Dockerfile), so the plain command
+      # name is always correct here regardless of the host's own path.
+      FFMPEG_PATH: ffmpeg
+      # Same shared volume as the api service — see its own comment above.
+      LOCAL_STORAGE_DIR: /app/data/media
+    volumes:
+      - socialith_media_data:/app/data/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:4100/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Optional as of this phase: apps/web/src/lib/api.ts falls back to
+        # the real browser origin (same-origin, no CORS preflight) when
+        # this is unset — correct for the recommended single-domain
+        # reverse-proxy topology (see docs/deployment-guzelhosting.md) and
+        # for a local Cloudflare Tunnel demo, where the exact public URL
+        # isn't known at image-build time. Still settable explicitly for a
+        # topology where web and api are genuinely on different origins.
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+
+volumes:
+  socialith_postgres_data:
+  socialith_redis_data:
+  socialith_media_data:

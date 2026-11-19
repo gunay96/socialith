@@ -1,0 +1,33 @@
+{
+  "name": "socialith",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Socialith — internal music marketing and social publishing platform",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "db:generate": "pnpm --filter @socialith/database generate",
+    "db:migrate": "pnpm --filter @socialith/database migrate",
+    "db:seed": "pnpm --filter @socialith/database seed",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:prod:up": "docker compose -f docker-compose.prod.yml --env-file .env up -d --build",
+    "docker:prod:down": "docker compose -f docker-compose.prod.yml down"
+  },
+  "devDependencies": {
+    "turbo": "^2.1.0",
+    "typescript": "^5.5.0",
+    "eslint": "^9.9.0",
+    "@eslint/js": "^9.9.0",
+    "typescript-eslint": "^8.3.0",
+    "prettier": "^3.3.0"
+  }
+}

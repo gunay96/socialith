@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    // Disables the sibling-source aliasing from tsconfig.json for the
+    // real build: at build time, @socialith/* must resolve the same way
+    // production `node` will resolve them later (via each package's
+    // package.json "main" -> dist/index.js), not via raw source outside
+    // this project's rootDir (which tsc would refuse to emit anyway —
+    // "File is not under 'rootDir'"). Turborepo's "build" task depends
+    // on "^build" (see turbo.json), so every @socialith/* dependency is
+    // already compiled to its own dist/ before this runs.
+    "paths": {}
+  },
+  "include": ["src"]
+}
