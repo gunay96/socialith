@@ -29,8 +29,9 @@ Internet ─ DNS (stable domain, e.g. socialith.co) ─ Caddy/nginx (TLS, 80/443
   background workers, no usable compiler, GLIBC 2.28, no Postgres).
 - **Sizing (starting point, to be load-tested):** 2–4 vCPU, 8 GB RAM, 80+ GB SSD. FFmpeg renders are the
   CPU/disk driver; media lives in R2, not on the VPS disk.
-- **Database:** PostgreSQL (recommended — PROJECT_AUDIT §1.4) as a container with nightly `pg_dump` to R2,
-  or a managed instance. If the owner keeps MySQL, run MySQL 8 and add an integration-test gate first.
+- **Database: MySQL 8.4 LTS** (owner decision 2026-11-19; verified on 8.0.46 and 8.4.13 by the real integration suite —
+  see `DATABASE_MYSQL.md`). Container on the internal network only, utf8mb4/utf8mb4_unicode_ci, strict `sql_mode`,
+  separate migration (DDL) and runtime (DML) users, nightly logical dump to R2 plus a restore drill; binlog/PITR decided in Phase 1.
 - **Redis:** container with AOF persistence (queues + sessions + rate limits).
 - **Media:** Cloudflare R2 with signed URLs; local disk only for transient render scratch.
 - **Webhooks:** Upload-Post needs a public HTTPS endpoint → requires the stable domain.
@@ -38,11 +39,13 @@ Internet ─ DNS (stable domain, e.g. socialith.co) ─ Caddy/nginx (TLS, 80/443
 - **Observability:** structured pino logs shipped to a log service, `/api/health` + worker `/health`
   uptime checks, error tracking (Sentry var exists), queue-depth and publish-failure alerts.
 
-### Staged fallback (only if a VPS is deferred)
-A "lite" tier on the existing shared cPanel host is possible **only** for Upload-Post metadata publishing:
-API + web via Setup Node.js App, MySQL, webhook endpoint for status, cPanel cron for the reconcile sweeper;
-**no FFmpeg, no AI-render, no BullMQ worker**. It inherits the unverified-MySQL and argon2→scrypt caveats
-and cannot support the Content Format Engine. Treat it as a stopgap, not the target.
+### Shared cPanel hosting
+**No longer a production target** (owner decision 2026-11-19). The cPanel ZIPs built earlier are superseded and contain
+a BOM defect in the migration files; they are not maintained. Do not use them.
+
+### Procurement and DNS
+Nothing is purchased and no DNS record is changed by this project's tooling. Buying the VPS and creating DNS records are
+owner actions (see `SOURCE_CONTROL_AND_INFRA_CHECKLIST.md` §I).
 
 ## 3. Environment matrix (names only)
 
@@ -81,7 +84,7 @@ is Phase 0's engine decision and must not be mixed with an outage repair.
 
 ## 5. Target rollout sequence
 
-1. Git baseline (F0.1) → engine decision (F0.2) → regenerate compose/CI/Dockerfiles for it.
+1. Git baseline (done, tag `baseline-gen2`) → engine decided: MySQL (done) → write `docker-compose.vps.yml`, MySQL-based CI and Dockerfiles (Phase 1).
 2. Provision VPS, firewall (22/80/443), non-root deploy user, Docker, Caddy/nginx with TLS on the stable domain
    (DNS is an owner action; nothing in the repo or any automation modifies DNS).
 3. Create secrets, rotate TikTok secret, set R2, email provider.

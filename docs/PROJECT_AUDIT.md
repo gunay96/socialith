@@ -1,5 +1,10 @@
 # Socialith — Project Audit (Phase 0)
 
+> **Status note (2026-11-19, later the same day):** the owner has since decided **MySQL** for the database and a
+> **VPS** for infrastructure. Git now exists (baseline tag `baseline-gen2`) and MySQL was verified against real
+> servers. This audit is kept as the point-in-time record; where it differs, see `DATABASE_MYSQL.md`,
+> `SOURCE_CONTROL_AND_INFRA_CHECKLIST.md` and the status section at the end of `TECHNICAL_DEBT.md`.
+
 Audit date: 2026-11-19. **Read-only**: no code, env var, container, or database
 was modified. Evidence level is stated per finding:
 **[live]** observed on a running system today, **[code]** read from source,
@@ -72,6 +77,11 @@ harmless portability work (`Json` scopes, `@db.Text`) and re-adding
 free because no data exists. If the owner instead insists on keeping the shared
 host for the web/API tier, MySQL stays and the first roadmap task becomes an integration
 test run against a real MySQL instance.
+
+**Decision record (owner, 2026-11-19): MySQL.** Reasons given: the canonical repo and the ZIPs are already MySQL +
+scrypt, the PostgreSQL images are an older generation, and a needless engine conversion should be avoided. The
+audit's PostgreSQL recommendation is therefore **not adopted**; the first roadmap task (a real MySQL integration
+test) was executed — 18/18 on MySQL 8.0.46 and 8.4.13 — see `DATABASE_MYSQL.md`.
 
 ---
 

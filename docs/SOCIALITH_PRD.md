@@ -136,7 +136,7 @@ billing/subscriptions for end customers, a public marketplace.
 
 ## 7. Open questions for the owner
 
-1. Database engine (PROJECT_AUDIT §1.4) — recommendation: PostgreSQL on a VPS.
+1. ~~Database engine~~ — **resolved 2026-11-19: MySQL** (see `DATABASE_MYSQL.md`); infrastructure: VPS.
 2. Is Upload-Post the *only* production publisher at launch (native TikTok/IG/YT kept dormant)?
 3. Creator compensation/contract tracking — in or out of scope?
 4. Languages for UI and AI output (Turkish/English)?

@@ -78,7 +78,7 @@ Direction: Upload-Post → Socialith (read-mostly), plus Socialith-initiated pro
   Handles deletes by marking `MISSING_REMOTE` (never hard-deleting local history).
 - Triggers: manual "Sync now", after connect callback, nightly, and on webhook
   `account connected/disconnected` events if the payload provides them **[UNVERIFIED]**.
-- Idempotent; safe to run concurrently (advisory lock / unique keys on
+- Idempotent; safe to run concurrently (MySQL `GET_LOCK` / unique keys on
   `(organizationId, provider, username)`).
 - Drift report: profiles present remotely but unmapped; mappings pointing at remote-missing profiles.
 
@@ -217,9 +217,11 @@ Per-page/day publish caps are a *Socialith guardrail* (PRD §2), independent of 
   capability table (extend `PLATFORM_CAPABILITIES` with a `provider` dimension), not from a global assumption.
 - TikTok: parameters `tiktok_music_id`, `tiktok_location_id` and music search endpoints exist, which **may** enable
   sound attachment that the native API cannot (`NOT_SUPPORTED` today). **[UNVERIFIED]** — confirm direct-post vs inbox mode,
-  allowed content settings, and platform/ToS acceptability before promising it. Note: if Upload-Post publishes through its own
-  approved platform apps, it can remove the need for Socialith to pass TikTok/Meta App Review for publishing — **to be confirmed
-  with Upload-Post**, along with each platform's disclosure requirements.
+  allowed content settings, and platform/ToS acceptability before promising it.
+- **Do not assume Upload-Post removes native platform review or authorization requirements.** Each account is still authorized
+  through the platform's own OAuth under that platform's rules, and some requirements (app review, business verification,
+  content-disclosure rules, posting limits) may still apply to the account owner or to Socialith. This is a Phase 2 verification
+  item, answered from Upload-Post's per-platform documentation and a controlled test account — not from this page.
 - Instagram requires Business/Creator accounts; Facebook requires `facebook_page_id`; LinkedIn page targeting; Pinterest boards;
   Google Business needs `gbp_location_id`/post type.
 - Scheduling support listed for X, LinkedIn, Facebook, Instagram, TikTok, Bluesky, Threads, Pinterest, YouTube, Discord, Telegram.
@@ -241,8 +243,25 @@ Never exposed via `NEXT_PUBLIC_*`.
 
 ## 13. Implementation roadmap (provider layer only; full plan in IMPLEMENTATION_ROADMAP.md)
 
-0. **Discovery with a real key:** read per-endpoint pages for the [UNVERIFIED] items; capture real responses
-   (`/me`, `/users`, upload, status, schedule, cancel, webhook) as test fixtures. Decide mode per platform.
+0. **Verification with a controlled test account (before any implementation).** Use one dedicated Upload-Post test profile with
+   throwaway social accounts; record every real response as a fixture. Each item is closed only with captured evidence:
+
+   | # | Verify | Closes |
+   |---|---|---|
+   | 1 | API authentication (`Apikey` header, `GET /me`, invalid-key behaviour) | §2 |
+   | 2 | Profile sync (`GET /users` shape, pagination, create/delete/rename) | §3 |
+   | 3 | Connected platform accounts per profile and how connect/disconnect works (JWT link, `oauth/{platform}/start`) | §3–4 |
+   | 4 | **Actual account/profile capacity** (field in `/me`? enforced error when exceeded?) — never assume 225 | §4, §10 |
+   | 5 | Video and image publishing (exact multipart/URL params, `platform[]`, titles/descriptions per platform, size limits) | §5 |
+   | 6 | Scheduling **and cancellation/reschedule** (paths, `scheduled_date`/timezone semantics, max horizon) | §6 |
+   | 7 | Publication history (`history` filters incl. `external_id`) | §6 duplicate protection |
+   | 8 | Status synchronization (`status` by `request_id`/`job_id`, per-platform results) | §7 |
+   | 9 | Webhooks (event types, payload, signature, retries, `redeliver`) | §7 |
+   | 10 | TikTok music (`tiktok_music_id`, search/trending; direct-post vs inbox; policy) | §11 |
+   | 11 | Platform-specific restrictions and which native review/authorization requirements still apply | §11 |
+
+   Outcome: this document is updated, every **[UNVERIFIED]** tag is removed or turned into a documented limitation, and only then
+   does provider code start.
 1. **Provider layer refactor (no behavior change):** provider-keyed registry; move credential resolution into
    providers; keep native providers passing all existing tests.
 2. **Data model (additive migrations):** `ProviderCredential`, `ProviderProfile`, `ProviderAccount`,

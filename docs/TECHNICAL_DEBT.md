@@ -31,6 +31,30 @@ roadmap phase · **S3** quality/efficiency.
 | TD-23 | S3 | Worker boot imports run `loadEnv()` at module scope (`publishing/enqueue.ts`, `scheduled/producers.ts`, API `lib/queue.ts`) | [code] | Config errors surface as import-time crashes with no structured log | Lazy init + a single validated bootstrap |
 | TD-24 | S3 | No observability beyond pino logs + `/health`; `SENTRY_DSN` unused | [code] | Cannot see publish failure rates | Metrics + error tracking once provider layer lands |
 
+## Status updates — after Phase 0 (2026-11-19)
+
+| ID | New status |
+|---|---|
+| TD-01 | **Resolved locally**: Git installed, repository initialised, baseline tag `baseline-gen2`, 4 commits. **Open:** private GitHub repo not yet created/pushed (owner action, `SOURCE_CONTROL_AND_INFRA_CHECKLIST.md` §F). |
+| TD-02 | **Decided**: MySQL is canonical; the Postgres/argon2 generation is retained only as rollback/reference (images tagged `:gen1`, volume and logical dump preserved, untouched). Compose/CI/Dockerfiles still Postgres-era → Phase 1. |
+| TD-03 | **Resolved**: baseline applied to real MySQL 8.0.46 and 8.4.13, no drift, 18/18 integration tests. (Not yet on the VPS.) |
+| TD-04, TD-05, TD-16 | Open — Phase 1 (worker env, reconciliation sweeper, stale-content guard, `API_PUBLIC_URL`). |
+| TD-06, TD-07 | Open — e-mail provider (Phase 1/8); TikTok secret rotation (owner). |
+| TD-17 | Open, narrowed: CI still Postgres → rewrite with the MySQL suite in Phase 1. |
+| TD-18 | **Partly resolved**: a real-database integration suite now exists (API repositories/services on MySQL). Still no HTTP E2E or browser tests. |
+| TD-22 | **Obsolete** under the MySQL decision (nothing to restore). |
+
+New items found by the real MySQL run:
+
+| ID | Sev | Debt | Evidence | Consequence | Fix direction |
+|---|---|---|---|---|---|
+| TD-25 | S3 | `%` and `_` in search text act as LIKE wildcards (Prisma `contains` does not escape them) | [test] pinned by a characterization test | `100%` also finds `100 organic`; no isolation impact (parameterized, org-scoped) | Escape wildcards in the six filters via one shared helper; update the pinned test deliberately |
+| TD-26 | S2 | **Concurrent upserts can lose a race on MySQL** (no native Prisma upsert): 2–3 of 6 parallel `upsertSocialAccount` calls failed with `P2002` (never a duplicate row) | [test] | Double-clicked/duplicated OAuth callback → intermittent 500 | Catch `P2002` and retry once (or use `INSERT … ON DUPLICATE KEY UPDATE` via raw SQL) in `upsertSocialAccount`/`upsertPlatformConnection`; keep the test as the regression guard |
+| TD-27 | S1 (fixed) | **UTF-8 BOM in `migration_lock.toml`/`migration.sql`** (PowerShell 5.1 `-Encoding utf8`) broke `prisma migrate deploy` (P3019) | [test] | Would have failed the first real deployment; unit tests could not detect it | Fixed in `85b98b3`. Guard: never write repo files with PowerShell 5.1 `Out-File/Set-Content -Encoding utf8`; the integration suite and a CI "no BOM" check catch regressions |
+| TD-28 | S3 | Line endings: Windows checkouts could turn `migration.sql` into CRLF and change its Prisma checksum | [code] | Checksum mismatch vs. a Linux-applied migration | Fixed: `.gitattributes` `* text=auto eol=lf` (`68e484d`) |
+| TD-29 | S3 | Superseded cPanel ZIPs (contain the BOM defect) still exist in `deploy-clean/` and the private backup | [live] | Someone could upload a broken package | Marked superseded in `DEPLOYMENT_PLAN.md`; folder is git-ignored; delete after the VPS is verified |
+| TD-30 | S3 | Turkish dotless `ı` ≠ `i` under `utf8mb4_unicode_ci` search | [test] | `kapi` does not find `Kapı` | Accept for now; evaluate a Turkish collation or normalized search column when the Text Library/search is built (Phase 5) |
+
 ## Debt that is **not** debt (preserve)
 
 Layered architecture (routes → controllers → services → repositories), org-scoped

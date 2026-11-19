@@ -4,7 +4,17 @@ Principle: **extend and repair; never recreate.** Every phase is additive (new t
 columns/routes), keeps all 262 existing tests green, and ends in something verifiable on a
 real system. **Nothing here starts until the owner approves** (PROJECT_AUDIT, PRD, this file).
 
-## Recommended development order
+> **Order superseded by the owner (2026-11-19).** The binding sequence is: **Phase 0** source control, security, database,
+> deployment foundation → **1** VPS environment, worker recovery, scheduling reliability → **2** Upload-Post provider
+> (verify the real API with a controlled test account first) → **3** Publishing Center and publication tracking →
+> **4** Page Network Manager and page groups → **5** Media Pack Manager and Text Library → **6** Content Format Engine and
+> AI Studio → **7** Artist, Music Catalog, Campaign improvements → **8** Creator Portal → **9** Analytics Center.
+> After each phase: report files, DB changes, test results, risks and rollback, then **wait for approval**. The phase table
+> and feature plans below are the earlier proposal; use the feature detail, but follow the owner's order. Database engine:
+> **MySQL** (decided). Infrastructure: **VPS** (decided). Native TikTok/Meta approvals are *not* assumed to be removed by
+> Upload-Post — to be verified in Phase 2.
+
+## Recommended development order (earlier proposal — see note above)
 
 | Phase | Goal | Exit criterion (real-world, not unit-test only) |
 |---|---|---|
@@ -30,10 +40,10 @@ after 3 (4 and 5 are mostly independent of each other).
 - **Missing:** remote, branch policy. **Deps:** none. **Risks:** accidentally committing `.env`/`.env.tunnel` (verify ignore first).
 - **Tests:** `git status` shows no secrets; CI later. **Order:** very first.
 
-### F0.2 Database engine decision & migration regeneration
-- **Existing:** PG migrations in images; one MySQL baseline in repo (unapplied). **Change:** per owner decision — recommended PostgreSQL: revert provider, regenerate a single baseline from the current schema, restore `mode:"insensitive"` in 6 filters, regenerate compose/CI. **Missing:** DB integration tests.
-- **Deps:** F0.1, owner decision. **Risks:** silent search-semantics change; baseline drift vs. images (irrelevant — seed-only data). 
-- **Tests:** apply baseline to empty DB in CI; repository tests against real DB (add); search-case tests. **Order:** after F0.1.
+### F0.2 Database: MySQL (DECIDED) — verification ✅ done in Phase 0
+- **Result:** baseline migration verified on real MySQL 8.0.46 and 8.4.13; 18 integration tests pass; BOM defect found and fixed; the six filters proven case-insensitive. Details: `DATABASE_MYSQL.md`.
+- **Still open:** TD-26 (concurrent-upsert race → retry on P2002), TD-25 (LIKE wildcards), VPS-side provisioning, backups and TLS (Phase 1), CI job running the MySQL suite (Phase 1).
+- **Tests:** `pnpm --filter @socialith/api test:mysql` against `docker-compose.mysql-test.yml`. **Order:** done; CI wiring in Phase 1.
 
 ### F0.3 Restore the worker (config-only)
 - **Existing:** worker code complete; container crash-loops. **Change:** worker env overrides (`NEXT_PUBLIC_APP_URL`, `API_PUBLIC_URL`); boot assertion that rejects localhost URLs in production with a clear structured log.
@@ -78,7 +88,7 @@ after 3 (4 and 5 are mostly independent of each other).
 - **Existing:** `ContentAsset`, multer memory upload (200 MB), R2 abstraction (unconfigured). **Change:** `MediaPack`/`MediaPackItem` (versioned, rights/expiry), direct-to-R2 presigned/resumable upload, ffprobe validation, thumbnails via existing op. **Deps:** F0.6. **Risks:** large uploads, rights enforcement. **Tests:** upload >200 MB without API memory growth, rights-expired blocked at publish.
 
 ### F5.1 Text Library
-- **Missing:** `TextLibrary/TextItem` with tags/lang/cool-down/usage counters; search (PG full-text if PostgreSQL). **Deps:** F2 (group assignment). **Tests:** cool-down enforcement, search relevance.
+- **Missing:** `TextLibrary/TextItem` with tags/lang/cool-down/usage counters; search (MySQL InnoDB `FULLTEXT`, with the ngram parser evaluated for Turkish; the `utf8mb4_unicode_ci` dotless-ı limitation applies to LIKE search). **Deps:** F2 (group assignment). **Tests:** cool-down enforcement, search relevance.
 
 ### F5.2 Content Format Engine
 - **Existing:** FFmpeg thumbnail op; unused TikTok/Reels/Shorts export presets; `VIDEO_OPERATIONS` registry. **Change:** add operations (aspect conversion via presets, trim, text overlay, simple compositions) as registry entries; `ContentFormat` definitions; previews. **Deps:** F4.3, worker (F0.3). **Risks:** FFmpeg CPU/disk, font licensing. **Tests:** golden-file frame checks, preset conformance, timeout/cleanup.
