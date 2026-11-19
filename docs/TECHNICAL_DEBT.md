@@ -99,6 +99,22 @@ New items found in the hardening pass:
 | TD-40 | S3 | CI runs MySQL 8.4 only; MySQL 8.0 compatibility is verified manually | [code] | An 8.0-only regression would not be caught on push | Add a matrix entry if 8.0 support is still wanted (it reaches end of life in April 2026) |
 | TD-41 | S3 | Deadlock-victim retries make Prisma log `prisma:error` lines during the concurrency tests | [test] | Noisy test output only; the retry is the intended behaviour | Accept |
 
+## Status updates — Phase 2 (Upload-Post, branch `phase2-uploadpost`)
+
+| ID | New status |
+|---|---|
+| TD-12 | **Partly resolved**: `ManagedPage` and `Creator` exist as minimal mapping targets that *reference* provider accounts (SocialAccount is untouched). The Page Network proper is Phase 4. |
+| TD-15, TD-14 | Unchanged. New consequence: presigned (≈ 1 h) R2 URLs are never handed to a provider scheduler (`assetUrlsAreDurable`). |
+
+New items found in Phase 2:
+
+| ID | Sev | Debt | Evidence | Consequence | Fix direction |
+|---|---|---|---|---|---|
+| TD-42 | S3 | Synchronization reads `GET /users` as one full list (the provider documents no pagination) | [doc] | Fine at the documented scale (≤ ~225 profiles); a provider change to pagination would truncate silently | Verify LIVE (UPLOAD_POST_API_MAPPING §6.1); add cursor handling if it paginates |
+| TD-43 | S3 | No profile-creation flow (client method exists and is mock-tested, not exposed) | [code] | Profiles must be created in Upload-Post | Add after read-only sync is verified LIVE; respect the reported profile limit |
+| TD-44 | S3 | Provider-side history is not imported; "Publishing history" shows publications Socialith originated | [code] | Posts made directly in Upload-Post are invisible here | Optional import via `GET /history` when needed |
+| TD-45 | S2 | Every provider response shape is documented-but-unverified (no live key during development) | [test] | A real difference would only show on first live use | Run `scripts/upload-post-live-check.mjs`, then reconcile `normalize.ts` with redacted fixtures |
+| TD-46 | S3 | Malformed JSON used to answer 500 on every route | [test] found by the webhook tests | Misleading errors | Fixed: body-parser errors now answer 400/413 |
 ## Debt that is **not** debt (preserve)
 
 Layered architecture (routes → controllers → services → repositories), org-scoped
