@@ -150,12 +150,14 @@ Engineering checklist (Phase 1) — see `VPS_DEPLOYMENT.md` §7 for the evidence
 - [x] Worker boot repair: root cause fixed and the worker runs healthy in the new stack (legacy worker deliberately untouched).
 - [x] Scheduling reliability: DB→Redis reconciler (+ self-healing schedules), stale-content hold, stuck-PUBLISHING recovery; the overdue seed rows are held and demo accounts can never publish (verified, incl. total Redis wipe and worker down/up).
 - [x] Redis persistence (AOF everysec) verified; MySQL nightly dump + verified restore drill + real disaster recovery verified. **Off-site copy and PITR drill not done** (TD-34).
-- [ ] Rewrite CI for MySQL (`docker-compose.mysql-test.yml` services), secret scan, tracked-env check — **not done** (TD-17).
+- [x] CI rewritten for MySQL 8.4 + Redis: migrations, drift check, unit, API + worker integration, typecheck, lint, build, image build, secret/BOM/tracked-env scan (TD-17; `docs/CI.md`). Steps replayed locally; **first GitHub run pending**; branch protection is an owner action.
 - [x] Fix TD-26 (upsert race) — resolved and proven on MySQL 8.0 and 8.4.
-- [x] Phase report: files, DB changes, tests, risks, rollback (delivered in chat); waiting for approval.
+- [x] **Final hardening:** production owner bootstrap command (TD-32; `VPS_DEPLOYMENT.md` §4a) with tests, and the TikTok credential-rotation procedure (`SECURITY_CREDENTIAL_ROTATION.md`; **rotation itself is owner-only and still pending**).
+- [x] Phase report: files, DB changes, tests, risks, rollback (`docs/PHASE1_ACCEPTANCE.md`); waiting for approval.
 
 ## J. Open decisions / actions waiting on you
 1. ~~Create the private GitHub repo and push (§F)~~ — done (`main` = `2bc24cf`, tags `baseline-gen2`, `phase0-complete`).
 2. Review and approve Phase 1 (branch `phase1-infrastructure`, **not merged into `main`**) so Phase 2 can start.
+   Also: **rotate the TikTok client secret** (`SECURITY_CREDENTIAL_ROTATION.md` §1) and, after the first push, require the CI checks in branch protection (`CI.md`).
 3. Decide when to buy the VPS and which provider (nothing is purchased automatically).
 4. Confirm: should the two unrelated side projects get their own repositories?

@@ -35,7 +35,8 @@ Internet ─ 80/443 ─ Caddy (automatic HTTPS, Let's Encrypt)
 | 2 | Pick the production domain and create its **A/AAAA record → the VPS IP** at your DNS provider. Caddy cannot get a certificate until that resolves. |
 | 3 | Open inbound 22, 80, 443 only (provider firewall and/or `ufw`). |
 | 4 | Create a Cloudflare R2 bucket + API keys (media; recommended over the local volume) and a transactional e-mail account when those phases need them. |
-| 5 | Rotate the TikTok client secret that was pasted into chat earlier (TD-07) before it is used anywhere. |
+| 5 | **Rotate the TikTok client secret** — it was pasted into chat earlier and must be treated as compromised (TD-07). Procedure: `SECURITY_CREDENTIAL_ROTATION.md`. |
+| 6 | Run the one-time owner bootstrap (§4a) with a password you generate in your password manager. |
 
 ## 3. Provision the server (outline)
 
@@ -65,10 +66,76 @@ sh infra/vps/scripts/smoke-test.sh https://YOUR_DOMAIN                          
 Back up `infra/vps/.env` and especially `TOKEN_ENCRYPTION_KEY` **separately from the database** (losing the key
 makes every stored OAuth token unreadable).
 
-> **Open blocker for real use — first user.** The app is invite-only and the only way to create the first OWNER
-> today is `packages/database/prisma/seed.ts`, which also creates demo accounts and a **known dev password**
-> (`change-me-in-dev`). **Never run the seed in production.** A safe one-off "create owner" command does not
-> exist yet and is not part of Phase 1; it must be added (with your approval) before anyone can log in on a real deployment.
+**Never run the development seed (`prisma/seed.ts`) in production** — it creates demo accounts and a public dev
+password. The first account is created with the dedicated owner-bootstrap command below.
+
+### 4a. First owner (one time)
+
+`apps/api/src/cli/bootstrap-owner.ts` creates the organization and its first `OWNER` — and nothing else (no demo
+accounts, no sample data). It runs inside the API image, with the same configuration and the same least-privilege
+database account (`socialith_app`, DML only) as the running API, and hashes the password with the same scrypt code
+as every normal login.
+
+**Safety properties** (each one is covered by automated tests, see §7):
+
+| Property | How |
+|---|---|
+| Production only | refuses unless `NODE_ENV=production`, the whole configuration validates, and `NEXT_PUBLIC_APP_URL` is `https` |
+| Right deployment | you must pass `--confirm-domain <your domain>`; a mismatch is refused before anything is read or written |
+| No second owner | refuses (exit 3) if **any** user already exists, or if the dev seed data is present |
+| Safe to re-run | the identical owner already existing → exit 0 "already initialized", nothing changed, **password not modified** |
+| No race | the check-and-insert is one SERIALIZABLE transaction: of 8 simultaneous runs exactly one wins (10 rounds on MySQL 8.0 and 8.4) |
+| Password never on argv/env | `--password` is rejected; use the hidden prompt, `--password-stdin` or `--password-file` |
+| Password never logged | not printed, not in the audit row (`OWNER_BOOTSTRAPPED`), not in error messages |
+
+**Procedure** — after §4 is up and `ps` shows everything `(healthy)`:
+
+```bash
+cd /opt/socialith
+COMPOSE="docker compose -f infra/vps/docker-compose.yml --env-file infra/vps/.env"
+
+# Option 1 (recommended): hidden interactive prompt, typed twice, never echoed, never in shell history
+$COMPOSE run --rm api node apps/api/dist/cli/bootstrap-owner.js \
+    --email you@yourcompany.com --name "Your Name" --organization "Your Company" \
+    --confirm-domain YOUR_DOMAIN
+```
+
+Use a **real mailbox you control** (reserved domains such as `example.com`, `.local`, `.test` are refused). The
+password must be at least 12 characters, must not contain the e-mail's local part, and must not be a known weak or
+development password. Use a password-manager-generated value.
+
+Non-interactive alternatives (still never argv/env):
+
+```bash
+# Option 2: standard input — `read -s` keeps the value out of history and out of `ps`
+read -rs OWNER_PW; printf '%s' "$OWNER_PW" | $COMPOSE run --rm -T api node apps/api/dist/cli/bootstrap-owner.js \
+    --email you@yourcompany.com --name "Your Name" --organization "Your Company" \
+    --confirm-domain YOUR_DOMAIN --password-stdin; unset OWNER_PW
+
+# Option 3: a file you delete afterwards (BOM / CRLF from Windows editors are tolerated)
+umask 077; printf '%s' 'the-password' > /root/owner-pw          # or create it with your editor
+$COMPOSE run --rm -v /root/owner-pw:/run/owner-pw:ro api node apps/api/dist/cli/bootstrap-owner.js \
+    --email you@yourcompany.com --name "Your Name" --organization "Your Company" \
+    --confirm-domain YOUR_DOMAIN --password-file /run/owner-pw
+shred -u /root/owner-pw
+```
+
+**Expected result:** `Owner created: you@yourcompany.com` and exit code 0. Then sign in at `https://YOUR_DOMAIN/login`.
+
+| Exit code | Meaning | What to do |
+|---|---|---|
+| 0 | created, or identical owner already existed | nothing |
+| 2 | refused before touching the database (not production, bad config, wrong `--confirm-domain`, invalid e-mail/password, no password source) | read the message; fix and re-run |
+| 3 | refused because of database state (`NOT_EMPTY`, `SEED_DATA_PRESENT`, `SLUG_TAKEN`, `SCHEMA_NOT_READY`) | `NOT_EMPTY`: an owner already exists — add people by invitation from the app. `SEED_DATA_PRESENT`: the dev seed was run against this database; start from an empty one (restore a clean backup or recreate the volume **only if you are sure it holds nothing you need**). `SCHEMA_NOT_READY`: run the migrations (`$COMPOSE up migrate`). |
+| 1 | unexpected failure (database unreachable, …) — the message is deliberately terse | `$COMPOSE ps`, `$COMPOSE logs mysql api`; nothing was committed |
+
+Afterwards: delete any password file, `unset` any shell variable that held it, and (if the password ever touched a
+terminal you do not trust) change it from the app. Losing access before other users exist is recovered only by
+restoring a backup or by a database administrator resetting the hash — keep the credential in a password manager.
+
+*Windows note:* Windows PowerShell 5.1 prepends a UTF-8 BOM when piping text to a program. The command strips one
+leading BOM and one trailing newline from stdin/file input, so the stored password equals what you type at the
+login form (this was found and fixed during the real-stack drill — without it the owner could not have logged in).
 
 ## 5. Updating and rolling back
 
@@ -115,6 +182,8 @@ docker compose -p socialith-p1 … down -v      # remove it (and its throwaway v
 | Backup → checksum → restore drill into a scratch DB → counts identical; tampered backup refused; unconfirmed live overwrite refused; real restore returns exactly to the backup point | yes |
 | Bad production env (localhost URL, no `API_PUBLIC_URL`) on the real worker and api images | one structured fatal line naming both variables, exit 1 |
 | FFmpeg inside the worker | extracts a real JPEG frame |
+| **Owner bootstrap (Phase 1 hardening)** in the real api image against MySQL 8.4 with the DML-only app account: wrong `--confirm-domain` refused (exit 2); create via stdin, hidden pseudo-terminal prompt (typed password not echoed) and BOM+CRLF password file all work (exit 0); identical re-run → "already initialized" (exit 0, password untouched); a different owner → `NOT_EMPTY` (exit 3); the created owner logs in through the real production-mode API (HTTP 200, role OWNER), a wrong password and the dev-seed credentials get 401 | yes |
+| Owner bootstrap races (real MySQL 8.0.46 and 8.4.13): 10 rounds × 8 simultaneous runs, repeated twice | exactly one owner every time (an earlier GET_LOCK design produced **two** owners and was replaced by a SERIALIZABLE transaction) |
 
 **Not verified — be honest about these before trusting it with production**
 - Real Let's Encrypt issuance, DNS, and reachability of 80/443 from the internet (tested with Caddy's internal CA).
