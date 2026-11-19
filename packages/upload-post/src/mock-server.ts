@@ -135,7 +135,7 @@ export function defaultProfiles(): MockProfile[] {
   ];
 }
 
-export async function startMockUploadPostServer(options: { apiKey?: string } = {}): Promise<MockUploadPostHandle> {
+export async function startMockUploadPostServer(options: { apiKey?: string; port?: number } = {}): Promise<MockUploadPostHandle> {
   const state: MockUploadPostState = {
     apiKey: options.apiKey ?? "test-key-0000000000",
     email: "owner@acme.test",
@@ -357,7 +357,7 @@ export async function startMockUploadPostServer(options: { apiKey?: string } = {
   const server: Server = createServer((req, res) => {
     handle(req, res).catch((err) => json(res, 500, { success: false, message: err instanceof Error ? err.message : "mock error" }));
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(options.port ?? 0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
 
   return {

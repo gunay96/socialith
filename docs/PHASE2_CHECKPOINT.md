@@ -3,7 +3,7 @@
 Branch `phase2-uploadpost` (base `main` @ `f061229`, the merged Phase 1). **Not merged. Not pushed as complete.**
 This file is updated after every significant milestone so a session can always resume from it.
 
-## 1. Where the work stands (milestone 2 — worker integration complete)
+## 1. Where the work stands (milestone 3 — API and webhook complete; dashboard next)
 
 | # | Unit | Status |
 |---|---|---|
@@ -12,9 +12,9 @@ This file is updated after every significant milestone so a session can always r
 | 3 | Worker: profile/account synchronization | **done**, 14 real-MySQL tests |
 | 4 | Worker: status synchronization, immediate video/photo publishing, correlation, duplicate protection, error classification, retries | **done**, wired into the existing publishing/poll processors, 23 tests |
 | 5 | Worker: hybrid scheduling (hand-off, drift, status sweep, one-owner guards) + BullMQ queue/repeatables | **done**, 21 tests |
-| 6 | API endpoints | next |
-| 7 | Webhook endpoint (signature verification, dedupe, enqueue reconcile) | next |
-| 8 | ManagedPage / Creator mapping (API) | next |
+| 6 | API endpoints (overview, health, plan, profiles, accounts, mapping, destinations, publications, scheduled, ManagedPage/Creator, TikTok music + mappings) | **done**, real express app + MySQL + Redis tests |
+| 7 | Webhook endpoint (raw-body signature verification, dedupe, enqueue reconcile) | **done**, 7 tests |
+| 8 | ManagedPage / Creator mapping (API) | **done** |
 | 9 | Dashboard pages (8) | pending |
 | 10 | API integration tests, docs (`UPLOAD_POST_INTEGRATION/API_MAPPING/SETUP/TESTING.md`), CI/Docker re-validation, final report | pending |
 
@@ -65,7 +65,9 @@ This file is updated after every significant milestone so a session can always r
   typecheck clean, lint 0 errors.
 - Not yet re-run after this milestone: api unit/integration, web, Docker build, CI (do before the final report).
 
-## 6. Next exact task
+## 6. Next exact task (superseded: API/webhook are done - see section 1; the next unit is the dashboard)
+
+### Original description of milestone 3 (done)
 
 Milestone 3: **API** under `/api/upload-post/*` (RBAC: ADMIN+ to change, VIEWER+ to read): overview, health (`ping`, cached), profiles,
 accounts (search/filter), mapping (profile→ManagedPage, account→Creator), enable/disable Publishing Destination, publications,

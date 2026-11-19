@@ -17,6 +17,7 @@ import { createAnalyticsRouter } from "./routes/analytics.js";
 import { createOAuthRouter } from "./routes/oauth.js";
 import { createPlatformCapabilitiesRouter } from "./routes/platform-capabilities.js";
 import { createDashboardRouter } from "./routes/dashboard.js";
+import { createUploadPostRouter, createUploadPostWebhookRouter } from "./routes/upload-post.js";
 import { createSessionMiddleware } from "./lib/session.js";
 import {
   createLoginRateLimiter,
@@ -73,7 +74,16 @@ export function createApp(redis: Redis | null): express.Express {
       },
     }),
   );
-  app.use(express.json({ limit: "2mb" }));
+  app.use(
+    express.json({
+      limit: "2mb",
+      // Webhook signatures are computed over the RAW bytes, never over re-serialized JSON, so the exact body of
+      // the one signed route is kept (nothing else retains raw bodies).
+      verify: (req, _res, buf) => {
+        if ((req as express.Request).originalUrl?.startsWith("/api/webhooks/upload-post")) (req as express.Request).rawBody = Buffer.from(buf);
+      },
+    }),
+  );
   app.use(pinoHttp({ logger }));
 
   // Phase 07: serves apps/worker's rendered assets and apps/api's own
@@ -125,6 +135,8 @@ export function createApp(redis: Redis | null): express.Express {
   app.use("/api", createOAuthRouter(createOAuthRateLimiter(redis)));
   app.use("/api", createPlatformCapabilitiesRouter());
   app.use("/api", createDashboardRouter());
+  app.use("/api", createUploadPostRouter());
+  app.use("/api", createUploadPostWebhookRouter());
 
   app.use(notFoundHandler);
   app.use(errorHandler);
