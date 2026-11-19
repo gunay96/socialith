@@ -8,6 +8,7 @@ import { logger } from "../logger.js";
 import { resolvePublishingProvider } from "../publishing/resolve-provider.js";
 import { resolveAccessToken } from "../publishing/token.js";
 import { enqueuePublishStatusPoll } from "../publishing/enqueue.js";
+import { DEMO_ACCOUNT_PUBLISH_MESSAGE, isDemoAccount } from "../publishing/demo-guard.js";
 import { PublishError, type PublishErrorCode, type PublishInput, type PublishSuccess } from "../publishing/types.js";
 
 /**
@@ -235,6 +236,18 @@ export async function processPublishing(job: Job<PublishingJobData>): Promise<vo
   const attemptNumber = target.attemptCount + 1;
   const startedAt = new Date();
   const env = loadEnv();
+
+  // Demo/seed accounts have fake credentials and must never reach a real
+  // platform API, however the target got here (schedule, retry, recovery).
+  if (isDemoAccount(target.socialAccount.providerMetadata)) {
+    await recordFailure(
+      target,
+      attemptNumber,
+      startedAt,
+      new PublishError(DEMO_ACCOUNT_PUBLISH_MESSAGE, "CONFIGURATION_ERROR", false),
+    );
+    return;
+  }
 
   let accessToken: string;
   try {

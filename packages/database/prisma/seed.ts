@@ -132,6 +132,11 @@ async function main() {
         status: sample.status,
         lastErrorMessage: "lastErrorMessage" in sample ? sample.lastErrorMessage : null,
         connectedById: owner.id,
+        // Marks this as DEMO data with fake credentials: apps/worker's
+        // publishing processor refuses to publish for any account carrying
+        // `seed: true` (publishing/demo-guard.ts), so seeded scheduled
+        // content can never reach a real platform API.
+        providerMetadata: { seed: true },
       },
     });
 
