@@ -55,6 +55,10 @@ export const QUEUE_NAMES = {
   ANALYTICS_SYNC: "analytics-sync",
   ANALYTICS_SYNC_SCAN: "analytics-sync-scan",
   CONTENT_SCHEDULING: "content-scheduling",
+  // Phase 1: repeatable DB↔Redis reconciler — re-creates missing scheduling
+  // jobs, holds stale scheduled content, recovers stuck PUBLISHING targets
+  // (apps/worker/src/scheduling).
+  SCHEDULING_RECONCILE: "scheduling-reconcile",
   TOKEN_REFRESH: "token-refresh",
   TOKEN_REFRESH_SCAN: "token-refresh-scan",
   NOTIFICATIONS: "notifications",
@@ -75,6 +79,17 @@ export const JOB_PRIORITY = {
  * can't drift out of sync. */
 export interface ContentSchedulingJobData {
   contentId: string;
+}
+
+/**
+ * The one deterministic BullMQ job id for a content item's scheduling job.
+ * Shared by the producer in apps/api (scheduleContent) and by the worker's
+ * reconciler so both always agree on which job "belongs" to a content item
+ * — a mismatch here would let the reconciler create a second, competing
+ * job.
+ */
+export function contentSchedulingJobId(contentId: string): string {
+  return `content-scheduling-${contentId}`;
 }
 
 /**
