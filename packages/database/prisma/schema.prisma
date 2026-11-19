@@ -997,6 +997,8 @@ model UploadPostPublication {
   lastSyncedAt       DateTime?                   @map("last_synced_at")
   lastErrorKind      String?                     @map("last_error_kind")
   lastErrorMessage   String?                     @map("last_error_message") @db.Text
+  // Delivery caveats worth showing next to the target (e.g. why a mapped TikTok track was not attached).
+  notes            String?                     @db.Text
   submittedAt        DateTime?                   @map("submitted_at")
   completedAt        DateTime?                   @map("completed_at")
   createdAt          DateTime                    @default(now()) @map("created_at")
