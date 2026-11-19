@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 // Reuses tsconfig.json's compilerOptions.paths (the same sibling-source
@@ -14,5 +14,8 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: false,
+    // Real-database tests run only through vitest.integration.config.ts
+    // (`pnpm test:mysql`), so the default `pnpm test` needs no infrastructure.
+    exclude: [...configDefaults.exclude, "src/integration/**"],
   },
 });

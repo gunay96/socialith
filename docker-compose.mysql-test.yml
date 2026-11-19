@@ -1,0 +1,44 @@
+# Throwaway MySQL servers for the MySQL integration tests
+# (apps/api/src/integration/mysql.integration.test.ts). Completely separate
+# from every other compose project in this repo (own project name, own
+# network, localhost-only ports, data on tmpfs — nothing persists, nothing
+# touches the legacy PostgreSQL stack).
+#
+# Passwords below are test-only throwaways for a database that exists for
+# the duration of a test run and is bound to 127.0.0.1; they are not secrets.
+#
+# Usage:  docker compose -f docker-compose.mysql-test.yml up -d --wait
+#         (then see docs/DATABASE_MYSQL.md for the test command)
+#         docker compose -f docker-compose.mysql-test.yml down
+name: socialith-mysql-test
+
+x-mysql-defaults: &mysql-defaults
+  command:
+    - --character-set-server=utf8mb4
+    - --collation-server=utf8mb4_unicode_ci
+  environment:
+    MYSQL_ROOT_PASSWORD: it-root-throwaway
+    MYSQL_DATABASE: socialith_it
+    MYSQL_USER: socialith
+    MYSQL_PASSWORD: it-app-throwaway
+  tmpfs:
+    - /var/lib/mysql
+  healthcheck:
+    test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -pit-root-throwaway --silent"]
+    interval: 3s
+    timeout: 3s
+    retries: 40
+    start_period: 10s
+
+services:
+  mysql80:
+    <<: *mysql-defaults
+    image: mysql:8.0
+    ports:
+      - "127.0.0.1:3380:3306"
+
+  mysql84:
+    <<: *mysql-defaults
+    image: mysql:8.4
+    ports:
+      - "127.0.0.1:3384:3306"
