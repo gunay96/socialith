@@ -1,47 +1,66 @@
 name: CI
 
+# Canonical architecture: MySQL 8.4 + Redis + BullMQ worker (Docker Compose on a
+# VPS). Nothing here references the obsolete PostgreSQL generation.
+#
+# Credentials: every value below is a throwaway for databases that exist only
+# for the duration of the job, bound to the runner's loopback interface.
+# No production secret is — or may ever be — available to this workflow:
+# it declares no `secrets.*` and requests read-only repository permission.
+
 on:
   pull_request:
     branches: [main]
   push:
-    branches: [main]
+    branches: [main, "phase*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  DATABASE_URL: "postgresql://socialith:socialith@localhost:5432/socialith?schema=public"
-  REDIS_URL: "redis://localhost:6379"
+  # --- CI-only throwaway configuration (not secrets) ------------------------
+  # Same values docker-compose.mysql-test.yml creates; see that file.
+  MYSQL_INTEGRATION_URL: "mysql://socialith:it-app-throwaway@127.0.0.1:3384/socialith_it"
+  REDIS_INTEGRATION_URL: "redis://127.0.0.1:6390"
+  # Required by @socialith/config for anything that calls loadEnv(); unit tests
+  # never connect to these.
+  DATABASE_URL: "mysql://socialith:it-app-throwaway@127.0.0.1:3384/socialith_it"
+  REDIS_URL: "redis://127.0.0.1:6390"
   SESSION_SECRET: "ci-only-placeholder-secret-not-for-production"
-  # 64 hex chars (32 bytes) — CI-only placeholder, same status as
-  # SESSION_SECRET above. Required by @socialith/config since Phase 04
-  # (packages/auth/src/token-crypto.ts).
   TOKEN_ENCRYPTION_KEY: "abababababababababababababababababababababababababababababababab"
 
 jobs:
-  build-and-test:
+  # ---------------------------------------------------------------------------
+  # Fast gate: no tracked env files / keys / dumps, no BOM or CRLF where it breaks
+  # Prisma, and no credential-shaped strings in the tree or anywhere in history.
+  # ---------------------------------------------------------------------------
+  hygiene:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for the secret scan)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: socialith
-          POSTGRES_PASSWORD: socialith
-          POSTGRES_DB: socialith
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U socialith -d socialith"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Repository hygiene and secret scan
+        run: node scripts/ci/check-repo-hygiene.mjs --history
+
+  # ---------------------------------------------------------------------------
+  # Lint, typecheck, unit tests, real-MySQL/Redis integration tests, build.
+  # ---------------------------------------------------------------------------
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -58,8 +77,17 @@ jobs:
           node-version: 20
           cache: pnpm
 
+      # MySQL 8.4 + Redis 7 from the same compose file developers use locally,
+      # so the server configuration (utf8mb4 / utf8mb4_unicode_ci) is identical.
+      # Throwaway: data on tmpfs, ports bound to 127.0.0.1.
+      - name: Start MySQL 8.4 and Redis
+        run: docker compose -f docker-compose.mysql-test.yml up -d --wait mysql84 redis
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm db:generate
 
       - name: Lint
         run: pnpm lint
@@ -67,14 +95,63 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Generate Prisma client
-        run: pnpm db:generate
+      - name: Unit tests
+        run: pnpm test
 
-      - name: Run database migrations
+      # `migrate deploy` is exactly what production runs. The diff then proves the
+      # live schema equals schema.prisma (exit code 2 = drift = fail).
+      - name: Apply migrations to MySQL 8.4
         run: pnpm --filter @socialith/database exec prisma migrate deploy
 
-      - name: Test
-        run: pnpm test
+      - name: Check for schema drift
+        run: >
+          pnpm --filter @socialith/database exec prisma migrate diff
+          --from-url "$DATABASE_URL"
+          --to-schema-datamodel prisma/schema.prisma
+          --exit-code
+
+      - name: API integration tests (real MySQL 8.4)
+        run: pnpm --filter @socialith/api test:mysql
+
+      - name: Worker integration tests (real MySQL 8.4 + Redis/BullMQ)
+        run: pnpm --filter @socialith/worker test:integration
 
       - name: Build
         run: pnpm build
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.mysql-test.yml logs --no-color --tail 80
+
+      - name: Stop services
+        if: always()
+        run: docker compose -f docker-compose.mysql-test.yml down -v
+
+  # ---------------------------------------------------------------------------
+  # Deployment artifacts: the VPS compose file parses, the images build, and the
+  # owner-bootstrap CLI is actually shipped inside the API image.
+  # ---------------------------------------------------------------------------
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # Placeholder values only — enough for Compose to interpolate; nothing is started.
+      COMPOSE: docker compose -f infra/vps/docker-compose.yml --env-file infra/vps/.env.example
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate the VPS compose file
+        run: $COMPOSE config --quiet
+
+      - name: Validate the shell scripts
+        run: |
+          for f in infra/vps/scripts/*.sh infra/vps/mysql/initdb/*.sh; do
+            bash -n "$f" && echo "ok  $f"
+          done
+
+      - name: Build api, worker and web images
+        run: $COMPOSE build api worker web
+
+      - name: Owner-bootstrap CLI is present in the API image
+        run: $COMPOSE run --rm --no-deps api node apps/api/dist/cli/bootstrap-owner.js --help
