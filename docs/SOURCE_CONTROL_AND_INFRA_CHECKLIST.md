@@ -71,9 +71,10 @@ Location (outside the repository): `C:\Users\Yiğit\Desktop\socialith-backups\20
 | `private\gen1-postgres-dump.sql` | Logical dump of the legacy PostgreSQL DB (seed data only; contains a seed password *hash*) | sensitive-ish |
 | `private\deploy-clean\` | Old cPanel build artifacts — **superseded and contain the BOM bug** | no |
 
-SHA-256: bundle `3E271D1C…EDCE910`, source zip `3AEE6130…57F8A1C` (full values recorded when the backup was taken; note the
-bundle predates commits `85b98b3`, `25468a7`, `68e484d` — **re-create the bundle after each approved phase**:
-`git bundle create <dir>\socialith-repo-<date>.bundle --all`).
+Two generations of the bundle exist: `socialith-repo-2026-11-19.bundle` (baseline `bba7092` only — contains the BOM defect,
+keep only as the historical baseline) and `socialith-repo-phase0-final.bundle` (all Phase 0 commits, **use this one**) with
+its source zip. SHA-256 values are in `SHA256SUMS.txt` next to them. **Re-create the bundle after each approved phase**:
+`git bundle create <dir>\socialith-repo-<label>.bundle --all`.
 
 **Restore procedure (verified):**
 ```bash
