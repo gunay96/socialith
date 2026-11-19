@@ -19,6 +19,7 @@ import { processTokenRefreshScan } from "./processors/token-refresh-scan.process
 import { closeScheduledProducers } from "./scheduled/producers.js";
 import { createBullMqSchedulingPort } from "./scheduling/queue-port.js";
 import { buildReconcileConfig, reconcileScheduling } from "./scheduling/reconcile.js";
+import { ensureRepeatable } from "./scheduling/ensure-repeatable.js";
 
 const env = loadEnv();
 
@@ -239,45 +240,56 @@ schedulingReconcileWorker.on("failed", (job, err) => {
   logger.error({ jobId: job?.id, err }, "scheduling-reconcile job failed");
 });
 
-/**
- * Registers the two repeatable scan jobs (BullMQ's native feature — not a
- * new scheduler dependency). Uses a fixed jobId per queue so re-running
- * this on every worker restart upserts the same repeatable job rather than
- * accumulating duplicates (BullMQ dedupes repeatable jobs by their key,
- * which is derived from name+id+pattern, so this is already idempotent —
- * the explicit jobId just keeps the key legible in Redis/Bull Board).
- */
-async function registerScheduledScans(): Promise<void> {
-  await analyticsSyncScanQueue.add(
-    QUEUE_NAMES.ANALYTICS_SYNC_SCAN,
-    {},
-    { jobId: "analytics-sync-scan", repeat: { every: 15 * 60 * 1000 }, removeOnComplete: true, removeOnFail: true },
-  );
-  await tokenRefreshScanQueue.add(
-    QUEUE_NAMES.TOKEN_REFRESH_SCAN,
-    {},
-    { jobId: "token-refresh-scan", repeat: { every: 15 * 60 * 1000 }, removeOnComplete: true, removeOnFail: true },
-  );
+const SCAN_EVERY_MS = 15 * 60 * 1000;
+const reconcileEveryMs = env.SCHEDULING_RECONCILE_INTERVAL_SECONDS * 1000;
 
-  // Scheduling reconciler: a changed SCHEDULING_RECONCILE_INTERVAL_SECONDS
-  // would otherwise leave the OLD repeatable registered next to the new one
-  // (BullMQ keys repeatables by their options), so drop any with another interval.
-  const everyMs = env.SCHEDULING_RECONCILE_INTERVAL_SECONDS * 1000;
-  for (const existing of await schedulingReconcileQueue.getRepeatableJobs()) {
-    if (existing.every !== null && Number(existing.every) !== everyMs) {
-      await schedulingReconcileQueue.removeRepeatableByKey(existing.key);
-    }
+/**
+ * Guarantees the three repeatable jobs (analytics scan, token-refresh scan,
+ * scheduling reconciler — BullMQ's native feature, not a new scheduler
+ * dependency) are registered. Idempotent (see scheduling/ensure-repeatable.ts)
+ * and called at boot AND on a timer: if Redis loses its state while this
+ * process keeps running, every repeatable schedule vanishes with it and the
+ * periodic work would otherwise stop until the next restart.
+ *
+ * `atBoot` always queues one reconcile immediately, so a restart recovers
+ * missing/overdue work right away; after boot, one is queued only when the
+ * reconciler's own schedule had to be re-created (a sign Redis lost state),
+ * which is exactly when recovery is most needed.
+ */
+async function ensureScheduledJobs(atBoot: boolean): Promise<void> {
+  await ensureRepeatable(analyticsSyncScanQueue, {
+    name: QUEUE_NAMES.ANALYTICS_SYNC_SCAN,
+    jobId: "analytics-sync-scan",
+    everyMs: SCAN_EVERY_MS,
+  });
+  await ensureRepeatable(tokenRefreshScanQueue, {
+    name: QUEUE_NAMES.TOKEN_REFRESH_SCAN,
+    jobId: "token-refresh-scan",
+    everyMs: SCAN_EVERY_MS,
+  });
+  const reconcile = await ensureRepeatable(schedulingReconcileQueue, {
+    name: QUEUE_NAMES.SCHEDULING_RECONCILE,
+    jobId: "scheduling-reconcile",
+    everyMs: reconcileEveryMs,
+  });
+
+  if (!atBoot && reconcile === "registered") {
+    logger.warn("repeatable schedules were missing while running (Redis state lost?) — re-registered, reconciling now");
   }
-  await schedulingReconcileQueue.add(
-    QUEUE_NAMES.SCHEDULING_RECONCILE,
-    {},
-    { jobId: "scheduling-reconcile", repeat: { every: everyMs }, removeOnComplete: true, removeOnFail: true },
-  );
-  // …and once right now, so a restart recovers missing/overdue work immediately.
-  await schedulingReconcileQueue.add(QUEUE_NAMES.SCHEDULING_RECONCILE, {}, { removeOnComplete: true, removeOnFail: true });
+  if (atBoot || reconcile === "registered") {
+    await schedulingReconcileQueue.add(QUEUE_NAMES.SCHEDULING_RECONCILE, {}, { removeOnComplete: true, removeOnFail: true });
+  }
 }
 
-void registerScheduledScans().catch((err) => logger.error({ err }, "failed to register scheduled scan jobs"));
+void ensureScheduledJobs(true).catch((err) => logger.error({ err }, "failed to register scheduled jobs"));
+
+// Re-assert the schedules at least once a minute (cheap, idempotent). unref():
+// this timer must never be the thing that keeps the process alive.
+const ensureTimer = setInterval(
+  () => void ensureScheduledJobs(false).catch((err) => logger.error({ err }, "failed to re-assert scheduled jobs")),
+  Math.min(reconcileEveryMs, 60_000),
+);
+ensureTimer.unref();
 
 // /health reports ready only once every worker is connected — a partial
 // start (e.g. one queue's Redis subscription still pending) should not
@@ -383,6 +395,7 @@ healthServer.listen(env.WORKER_PORT, () => {
 
 async function shutdown(signal: string) {
   logger.info(`Received ${signal}, shutting down worker gracefully`);
+  clearInterval(ensureTimer);
   await Promise.allSettled([
     systemWorker.close(),
     systemQueue.close(),

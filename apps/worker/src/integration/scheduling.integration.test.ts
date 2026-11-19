@@ -6,6 +6,7 @@ import { prisma } from "@socialith/database";
 import { QUEUE_NAMES, contentSchedulingJobId } from "@socialith/types";
 import { processContentScheduling } from "../processors/content-scheduling.processor.js";
 import { processPublishing } from "../processors/publishing.processor.js";
+import { ensureRepeatable } from "../scheduling/ensure-repeatable.js";
 import { createBullMqSchedulingPort, type SchedulingQueuePort } from "../scheduling/queue-port.js";
 import { buildReconcileConfig, reconcileScheduling } from "../scheduling/reconcile.js";
 
@@ -363,6 +364,69 @@ suite("scheduling reconciliation (real MySQL + real Redis/BullMQ)", () => {
       await processContentScheduling(job(content.id));
 
       expect((await prisma.content.findUniqueOrThrow({ where: { id: content.id } })).status).toBe("SCHEDULED");
+    });
+  });
+
+  describe("repeatable schedules survive Redis state loss (found by wiping Redis under a running stack)", () => {
+    /** Deletes every key of ONE test keyspace — a stand-in for "Redis lost its data", without FLUSHALL (never run that against a shared Redis). */
+    async function wipeKeyspace(prefix: string): Promise<number> {
+      const redis = new Redis(redisUrl!);
+      try {
+        const keys = await redis.keys(`${prefix}:*`);
+        if (keys.length > 0) await redis.del(...keys);
+        return keys.length;
+      } finally {
+        redis.disconnect();
+      }
+    }
+    const spec = { name: QUEUE_NAMES.SCHEDULING_RECONCILE, jobId: "scheduling-reconcile", everyMs: 60_000 };
+
+    it("registers once, then reports it is already present (no duplicates)", async () => {
+      const { inspect } = freshPort();
+      const queue = inspect(QUEUE_NAMES.SCHEDULING_RECONCILE);
+      expect(await ensureRepeatable(queue, spec)).toBe("registered");
+      expect(await ensureRepeatable(queue, spec)).toBe("present");
+      expect(await ensureRepeatable(queue, spec)).toBe("present");
+      expect(await queue.getRepeatableJobs()).toHaveLength(1);
+    });
+
+    it("re-registers after Redis loses everything — the reconciler's schedule comes back", async () => {
+      const { prefix, inspect } = freshPort();
+      const queue = inspect(QUEUE_NAMES.SCHEDULING_RECONCILE);
+      expect(await ensureRepeatable(queue, spec)).toBe("registered");
+      expect(await queue.getRepeatableJobs()).toHaveLength(1);
+
+      expect(await wipeKeyspace(prefix)).toBeGreaterThan(0);
+      expect(await queue.getRepeatableJobs()).toHaveLength(0); // the periodic work has silently stopped
+
+      expect(await ensureRepeatable(queue, spec)).toBe("registered");
+      expect(await queue.getRepeatableJobs()).toHaveLength(1);
+    });
+
+    it("replaces a stale interval instead of running two schedules side by side", async () => {
+      const { inspect } = freshPort();
+      const queue = inspect(QUEUE_NAMES.SCHEDULING_RECONCILE);
+      await ensureRepeatable(queue, { ...spec, everyMs: 60_000 });
+      expect(await ensureRepeatable(queue, { ...spec, everyMs: 30_000 })).toBe("registered");
+      const repeatables = await queue.getRepeatableJobs();
+      expect(repeatables).toHaveLength(1);
+      expect(Number(repeatables[0]!.every)).toBe(30_000);
+    });
+
+    it("end to end: a pending job lost with Redis is re-created by the next reconcile", async () => {
+      const org = await makeOrg("state-loss");
+      const content = await makeContent(org.id, "SCHEDULED", new Date(Date.now() + 10 * MIN));
+      const { port, prefix, inspect } = freshPort();
+      const scheduling = inspect(QUEUE_NAMES.CONTENT_SCHEDULING);
+
+      expect((await reconcile(port)).schedulingJobsEnqueued).toBe(1);
+      expect(await scheduling.getJob(contentSchedulingJobId(content.id))).toBeTruthy();
+
+      await wipeKeyspace(prefix);
+      expect(await scheduling.getJob(contentSchedulingJobId(content.id))).toBeFalsy();
+
+      expect((await reconcile(port)).schedulingJobsEnqueued).toBe(1);
+      expect(await scheduling.getJob(contentSchedulingJobId(content.id))).toBeTruthy();
     });
   });
 
