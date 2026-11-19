@@ -55,6 +55,31 @@ New items found by the real MySQL run:
 | TD-29 | S3 | Superseded cPanel ZIPs (contain the BOM defect) still exist in `deploy-clean/` and the private backup | [live] | Someone could upload a broken package | Marked superseded in `DEPLOYMENT_PLAN.md`; folder is git-ignored; delete after the VPS is verified |
 | TD-30 | S3 | Turkish dotless `ı` ≠ `i` under `utf8mb4_unicode_ci` search | [test] | `kapi` does not find `Kapı` | Accept for now; evaluate a Turkish collation or normalized search column when the Text Library/search is built (Phase 5) |
 
+## Status updates — after Phase 1 (2026-11-19, branch `phase1-infrastructure`)
+
+| ID | New status |
+|---|---|
+| TD-04 | **Resolved for the canonical stack**: the worker boots healthy (all 11 BullMQ workers ready) in the new VPS compose. The **legacy** worker is intentionally *not* repaired (legacy stack untouched by instruction); its root cause is documented. |
+| TD-05 | **Resolved**: DB→Redis reconciler (boot + every minute), stale-content hold, stuck-PUBLISHING recovery. Drilled on a real stack incl. a total Redis wipe. |
+| TD-16 | **Resolved**: production config refuses a missing/localhost `API_PUBLIC_URL`; one URL set feeds api, worker and migrate. |
+| TD-23 | **Mitigated**: `bootstrap.ts` entry points validate config first and emit one structured fatal line; module-scope `loadEnv()` calls still exist but can no longer crash unreadably. |
+| TD-26 | **Resolved**: `connectAccount` retries the lost upsert race. Before: 9 of 10 simultaneous callbacks failed; after: 10/10 succeed on MySQL 8.0 and 8.4. |
+| TD-17 | Narrowed: a MySQL-based compose exists; **CI is still PostgreSQL-era** (no repo workflow runs the MySQL/Redis integration suites yet). |
+| TD-18 | Improved: real-database suites for api (22 tests) and worker (18 tests). No automated HTTP/browser E2E in the repo (the E2E run was manual, documented in `VPS_DEPLOYMENT.md` §7). |
+| TD-25, TD-30 | Open (unchanged). |
+
+New items found in Phase 1:
+
+| ID | Sev | Debt | Evidence | Consequence | Fix direction |
+|---|---|---|---|---|---|
+| TD-31 | S3 | Test files are excluded from `tsc` (`tsconfig.base.json` excludes `**/*.test.ts`) | [live] a missing `vi` import in an integration test was not caught by typecheck | Type errors in tests surface only at runtime | Add a test tsconfig / `typecheck:tests` step to CI |
+| TD-32 | **S1** | **No production bootstrap-owner command**: the only way to create the first OWNER is `seed.ts`, which also creates demo accounts and a known dev password | [code] | Nobody can log in on a real deployment without running the dev seed (must never run in production) | Add a one-off, non-seed `create-owner` command (needs approval; Phase 8 e-mail not required) |
+| TD-33 | S3 | A held (stale) item cannot be re-scheduled from the UI — only `PENDING` targets are re-scheduled; Retry (publish now) is the supported path | [code] | Awkward recovery for held items | Let `scheduleContent` re-arm FAILED/held targets, or add a "Reschedule held" action |
+| TD-34 | **S1** | **No off-site backup** (dump stays on the VPS disk); binlog PITR not drilled | [code] | VPS loss = data loss | rclone/`aws s3` sync to R2/other region with write-only credentials; drill PITR |
+| TD-35 | S2 | No monitoring/alerting stack; only health endpoints and container healthchecks | [code] | Outages and backlogs go unnoticed | External uptime check + log/metric shipping (`OPERATIONS_RUNBOOK.md` §4) |
+| TD-36 | S3 | `content` has no index on `(status, scheduled_at)`; the reconciler's per-minute `status = 'SCHEDULED'` scan relies on `(organization_id, status)` which cannot serve it | [code] | Full-table scan each minute — fine at thousands of rows, not at hundreds of thousands | Additive migration adding the index when volume warrants |
+| TD-37 | S3 | Legacy Docker stack's worker is still crash-looping (deliberately left untouched) | [live] | Confusing if someone reads its logs | Remove the legacy stack once the VPS deployment is verified |
+
 ## Debt that is **not** debt (preserve)
 
 Layered architecture (routes → controllers → services → repositories), org-scoped
