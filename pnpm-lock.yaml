@@ -41,6 +41,9 @@ importers:
       '@socialith/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@socialith/upload-post':
+        specifier: workspace:*
+        version: link:../../packages/upload-post
       '@socialith/video-engine':
         specifier: workspace:*
         version: link:../../packages/video-engine
@@ -175,6 +178,9 @@ importers:
       '@socialith/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@socialith/upload-post':
+        specifier: workspace:*
+        version: link:../../packages/upload-post
       '@socialith/video-engine':
         specifier: workspace:*
         version: link:../../packages/video-engine
@@ -268,6 +274,18 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+
+  packages/upload-post:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)
 
   packages/video-engine:
     dependencies:
