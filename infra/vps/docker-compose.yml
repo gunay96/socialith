@@ -63,6 +63,29 @@ services:
   mysql:
     <<: *restart
     image: mysql:8.4
+    # Settings are passed as command-line arguments, NOT via a mounted .cnf
+    # file: mysqld silently ignores any config file that is world-writable
+    # (a Windows/NTFS bind mount, or a permissive umask on a server), and a
+    # config that is "mounted but ignored" is worse than none — this was found
+    # by checking @@innodb_buffer_pool_size on the running verification stack.
+    # A STARTING POINT sized for a 4 vCPU / 8 GB VPS shared with api, worker
+    # (FFmpeg) and web; revisit under real load (docs/OPERATIONS_RUNBOOK.md).
+    command:
+      # characters/comparisons — must match the migration's per-table collation
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      # keep the strict default: lossy implicit conversions are bugs, not features
+      - --sql-mode=ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+      # memory: ~1 GiB buffer pool leaves room for the other services
+      - --innodb-buffer-pool-size=1G
+      - --innodb-redo-log-capacity=536870912
+      - --max-connections=100
+      # binary logging stays on (default in 8.x), 7-day window = point-in-time recovery between nightly dumps
+      - --binlog-expire-logs-seconds=604800
+      # slow-query visibility for the monitoring runbook
+      - --slow-query-log=ON
+      - --long-query-time=1
+      - --mysqlx=OFF
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-socialith}
@@ -75,7 +98,6 @@ services:
       MYSQL_BACKUP_PASSWORD: ${MYSQL_BACKUP_PASSWORD:?MYSQL_BACKUP_PASSWORD is required}
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./mysql/socialith.cnf:/etc/mysql/conf.d/socialith.cnf:ro
       - ./mysql/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]

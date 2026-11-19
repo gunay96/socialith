@@ -19,6 +19,10 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_APP_
 
 CREATE USER IF NOT EXISTS '${MYSQL_MIGRATE_USER}'@'%' IDENTIFIED BY '${MYSQL_MIGRATE_PASSWORD}';
 GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_MIGRATE_USER}'@'%';
+-- Scope for the safe restore DRILL (scripts/restore-mysql.sh with TARGET_DB=<db>_restore_check):
+-- a backup can be restored and inspected without touching the live database.
+-- (\_ is a literal underscore in a GRANT database pattern.)
+GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\\_restore\\_check\`.* TO '${MYSQL_MIGRATE_USER}'@'%';
 
 CREATE USER IF NOT EXISTS '${MYSQL_BACKUP_USER}'@'%' IDENTIFIED BY '${MYSQL_BACKUP_PASSWORD}';
 GRANT SELECT, SHOW VIEW, TRIGGER, LOCK TABLES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_BACKUP_USER}'@'%';
