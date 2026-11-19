@@ -1,7 +1,8 @@
-# Normalize line endings in the repository (repo-side LF); the working tree
-# follows each developer's core.autocrlf. Keeps Docker/Linux shell scripts and
-# lockfiles stable when the project is edited on Windows.
-* text=auto
+# LF everywhere, in the repository AND in every checkout (including Windows).
+# Required, not cosmetic: Prisma checksums migration files byte-for-byte, so a
+# Windows checkout turning migration.sql into CRLF would not match the bytes a
+# Linux server applied. Also keeps Docker/shell files and lockfiles stable.
+* text=auto eol=lf
 
 *.png binary
 *.jpg binary
