@@ -5,6 +5,8 @@ export interface RepeatableSpec {
   name: string;
   jobId: string;
   everyMs: number;
+  /** Job payload (default {}); the Upload-Post jobs carry their kind here. */
+  data?: Record<string, unknown>;
 }
 
 /**
@@ -36,6 +38,6 @@ export async function ensureRepeatable(queue: Queue, spec: RepeatableSpec): Prom
   }
   if (present) return "present";
 
-  await queue.add(spec.name, {}, { jobId: spec.jobId, repeat: { every: spec.everyMs }, removeOnComplete: true, removeOnFail: true });
+  await queue.add(spec.name, spec.data ?? {}, { jobId: spec.jobId, repeat: { every: spec.everyMs }, removeOnComplete: true, removeOnFail: true });
   return "registered";
 }

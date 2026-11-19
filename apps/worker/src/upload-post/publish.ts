@@ -145,7 +145,7 @@ export async function resolveTikTokMusic(
   return { musicId: usable.providerMusicId, note: null };
 }
 
-function chooseMedia(assets: { type: string; url: string }[]): { kind: "video"; url: string } | { kind: "photos"; urls: string[] } | null {
+export function chooseMedia(assets: { type: string; url: string }[]): { kind: "video"; url: string } | { kind: "photos"; urls: string[] } | null {
   const video = assets.find((a) => a.type === "VIDEO");
   if (video) return { kind: "video", url: video.url };
   const images = assets.filter((a) => a.type === "IMAGE").map((a) => a.url);

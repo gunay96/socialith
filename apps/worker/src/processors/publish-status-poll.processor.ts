@@ -9,6 +9,8 @@ import { resolveAccessToken } from "../publishing/token.js";
 import { enqueuePublishStatusPoll } from "../publishing/enqueue.js";
 import { PublishError } from "../publishing/types.js";
 import { maybeFinalizeContentStatus } from "./publishing.processor.js";
+import { getUploadPostClient } from "../upload-post/client.js";
+import { pollUploadPostTarget } from "../upload-post/publish.js";
 
 const TARGET_INCLUDE = {
   content: { select: { id: true, organizationId: true } },
@@ -17,6 +19,9 @@ const TARGET_INCLUDE = {
 
 /** Real bound on how long a target can stay PUBLISHING waiting for TikTok — 20 attempts * 15s interval ≈ 5 minutes, generous for TikTok's own documented processing time while never polling forever on a genuinely stuck publish_id. */
 const MAX_POLL_ATTEMPTS = 20;
+
+/** Upload-Post uploads can legitimately take longer (async transcode + platform processing): 120 polls * 15 s = 30 minutes. After that this job stops; the Upload-Post sweep keeps reconciling the publication until the provider reports a final state (it fails a job with no activity after 1 h), so nothing is abandoned. */
+const UPLOAD_POST_MAX_POLL_ATTEMPTS = 120;
 
 /**
  * Fires once per poll for a ContentTarget whose provider returned
@@ -46,6 +51,19 @@ export async function processPublishStatusPoll(job: Job<PublishStatusPollJobData
     return;
   }
 
+  if (target.socialAccount.publishingProvider === "UPLOAD_POST") {
+    const state = await pollUploadPostTarget(prisma, getUploadPostClient(loadEnv()), target.id);
+    if (state === "done") {
+      logger.info({ contentTargetId }, "publish-status-poll: Upload-Post publication reached a final state");
+      return;
+    }
+    if (attempt >= UPLOAD_POST_MAX_POLL_ATTEMPTS) {
+      logger.warn({ contentTargetId, attempt }, "publish-status-poll: Upload-Post still processing; polling stops, the sweep keeps reconciling");
+      return;
+    }
+    await enqueuePublishStatusPoll(target.id, attempt + 1);
+    return;
+  }
   const provider = resolvePublishingProvider(target.socialAccount.platform);
   if (!provider.checkPublishStatus) {
     // Defensive only — nothing enqueues a poll for a provider that never

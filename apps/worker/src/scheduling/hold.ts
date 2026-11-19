@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@socialith/database";
+import { PROVIDER_OWNED, SOCIALITH_OWNED } from "./ownership.js";
 import { staleHoldMessage } from "./policy.js";
 
 export interface StaleContent {
@@ -28,6 +29,28 @@ export async function holdStaleContent(
   const message = staleHoldMessage(content.scheduledAt, staleAfterMinutes);
 
   return db.$transaction(async (tx) => {
+    // Targets the Upload-Post scheduler owns are never held or failed by Socialith. If some targets are
+    // provider-owned, only the Socialith-owned ones are held and the content itself stays SCHEDULED until
+    // the provider reports (the roll-up then finalizes it).
+    const providerOwned = await tx.contentTarget.count({ where: { contentId: content.id, status: "SCHEDULED", ...PROVIDER_OWNED } });
+    if (providerOwned > 0) {
+      const heldTargets = await tx.contentTarget.updateMany({
+        where: { contentId: content.id, status: "SCHEDULED", ...SOCIALITH_OWNED },
+        data: { status: "FAILED", errorMessage: message },
+      });
+      if (heldTargets.count === 0) return false;
+      await tx.auditLog.create({
+        data: {
+          organizationId: content.organizationId,
+          action: "SCHEDULE_HELD_STALE",
+          targetType: "Content",
+          targetId: content.id,
+          metadataJson: { scheduledAt: content.scheduledAt.toISOString(), heldAt: heldAt.toISOString(), staleAfterMinutes, partial: true, providerOwnedTargets: providerOwned },
+        },
+      });
+      return true;
+    }
+
     const changed = await tx.content.updateMany({
       where: { id: content.id, status: "SCHEDULED" },
       data: { status: "FAILED" },

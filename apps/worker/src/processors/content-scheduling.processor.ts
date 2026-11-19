@@ -6,6 +6,7 @@ import { logger } from "../logger.js";
 import { enqueuePublishingJob } from "../publishing/enqueue.js";
 import { holdStaleContent } from "../scheduling/hold.js";
 import { classifySchedule, EARLY_FIRE_TOLERANCE_MS } from "../scheduling/policy.js";
+import { SOCIALITH_OWNED } from "../scheduling/ownership.js";
 
 /**
  * Fires once a scheduled content item's `scheduledAt` arrives (job
@@ -97,7 +98,7 @@ export async function processContentScheduling(job: Job<ContentSchedulingJobData
     await prisma.$transaction([
       prisma.content.update({ where: { id: contentId }, data: { status: "FAILED" } }),
       prisma.contentTarget.updateMany({
-        where: { contentId, status: "SCHEDULED" },
+        where: { contentId, status: "SCHEDULED", ...SOCIALITH_OWNED },
         data: { status: "FAILED", errorMessage },
       }),
     ]);
@@ -105,15 +106,20 @@ export async function processContentScheduling(job: Job<ContentSchedulingJobData
     return;
   }
 
+  // Targets handed to Upload-Post's scheduler are not ours to fire (see scheduling/ownership.ts).
   const targetsToPublish = await prisma.contentTarget.findMany({
-    where: { contentId, status: "SCHEDULED" },
+    where: { contentId, status: "SCHEDULED", ...SOCIALITH_OWNED },
     select: { id: true },
   });
+  if (targetsToPublish.length === 0) {
+    logger.info({ contentId }, "content-scheduling: every remaining target is owned by the Upload-Post scheduler, nothing to fire");
+    return;
+  }
 
   await prisma.$transaction([
     prisma.content.update({ where: { id: contentId }, data: { status: "PUBLISHING" } }),
     prisma.contentTarget.updateMany({
-      where: { contentId, status: "SCHEDULED" },
+      where: { contentId, status: "SCHEDULED", ...SOCIALITH_OWNED },
       data: { status: "PUBLISHING" },
     }),
   ]);

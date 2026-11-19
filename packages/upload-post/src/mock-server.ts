@@ -86,8 +86,10 @@ export interface MockUploadPostHandle {
   state: MockUploadPostState;
   /** Answer the next matching request(s) with this response instead of the normal one. */
   script(response: Scripted, times?: number): void;
-  /** Delay every response (ms) — for timeout tests. 0 clears. */
+  /** Delay every request BEFORE it is handled (ms) — the provider has not seen it yet. 0 clears. */
   setDelay(ms: number): void;
+  /** Delay only the RESPONSE to publish calls, after the publication was created (ms): the provider processed it but the answer is "lost" to a client that times out. 0 clears. */
+  setResponseDelay(ms: number): void;
   /** Move an async publication to a final state with per-platform results. */
   finishPublication(requestId: string, outcome: "completed" | "failed", results?: Array<Record<string, unknown>>): void;
   /** Run a scheduled job as the provider would at its time. */
@@ -160,6 +162,7 @@ export async function startMockUploadPostServer(options: { apiKey?: string } = {
   };
   const scripted: Scripted[] = [];
   let delayMs = 0;
+  let responseDelayMs = 0;
 
   const json = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
     res.writeHead(status, { "Content-Type": "application/json", ...headers });
@@ -293,6 +296,7 @@ export async function startMockUploadPostServer(options: { apiKey?: string } = {
         response = { status: 200, body: { success: true, message: "Upload started", request_id: requestId, total_platforms: platforms.length } };
       }
       if (idemKey) state.idempotency.set(idemKey, response);
+      if (responseDelayMs > 0) await new Promise((r) => setTimeout(r, responseDelayMs));
       return json(res, response.status, response.body);
     }
 
@@ -364,6 +368,9 @@ export async function startMockUploadPostServer(options: { apiKey?: string } = {
     },
     setDelay(ms) {
       delayMs = ms;
+    },
+    setResponseDelay(ms) {
+      responseDelayMs = ms;
     },
     finishPublication(requestId, outcome, results) {
       const pub = state.publications.get(requestId);
