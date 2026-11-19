@@ -17,6 +17,8 @@ import { processAnalyticsSyncScan } from "./processors/analytics-sync-scan.proce
 import { processTokenRefresh } from "./processors/token-refresh.processor.js";
 import { processTokenRefreshScan } from "./processors/token-refresh-scan.processor.js";
 import { closeScheduledProducers } from "./scheduled/producers.js";
+import { createBullMqSchedulingPort } from "./scheduling/queue-port.js";
+import { buildReconcileConfig, reconcileScheduling } from "./scheduling/reconcile.js";
 
 const env = loadEnv();
 
@@ -213,6 +215,30 @@ tokenRefreshScanWorker.on("failed", (job, err) => {
   logger.error({ jobId: job?.id, err }, "token-refresh-scan job failed");
 });
 
+// Phase 1: DB↔Redis scheduling reconciler (apps/worker/src/scheduling). The
+// database is the source of truth for what is scheduled; BullMQ only executes.
+// Re-creates missing scheduling/publishing jobs, holds stale scheduled content
+// instead of publishing it late, recovers targets stuck in PUBLISHING. Runs
+// once at every worker start and then on an interval.
+const schedulingPort = createBullMqSchedulingPort(env.REDIS_URL);
+const reconcileConfig = buildReconcileConfig(env);
+const schedulingReconcileQueue = new Queue(QUEUE_NAMES.SCHEDULING_RECONCILE, { connection });
+const schedulingReconcileWorker = new Worker(
+  QUEUE_NAMES.SCHEDULING_RECONCILE,
+  async () => {
+    const summary = await reconcileScheduling({ db: prisma, port: schedulingPort, config: reconcileConfig });
+    const acted = Object.entries(summary).some(([key, value]) => key !== "scheduledChecked" && value > 0);
+    if (acted) logger.info({ summary }, "scheduling-reconcile: run complete");
+    else logger.debug({ summary }, "scheduling-reconcile: run complete, nothing to do");
+    return summary;
+  },
+  { connection, concurrency: 1 },
+);
+
+schedulingReconcileWorker.on("failed", (job, err) => {
+  logger.error({ jobId: job?.id, err }, "scheduling-reconcile job failed");
+});
+
 /**
  * Registers the two repeatable scan jobs (BullMQ's native feature — not a
  * new scheduler dependency). Uses a fixed jobId per queue so re-running
@@ -232,6 +258,23 @@ async function registerScheduledScans(): Promise<void> {
     {},
     { jobId: "token-refresh-scan", repeat: { every: 15 * 60 * 1000 }, removeOnComplete: true, removeOnFail: true },
   );
+
+  // Scheduling reconciler: a changed SCHEDULING_RECONCILE_INTERVAL_SECONDS
+  // would otherwise leave the OLD repeatable registered next to the new one
+  // (BullMQ keys repeatables by their options), so drop any with another interval.
+  const everyMs = env.SCHEDULING_RECONCILE_INTERVAL_SECONDS * 1000;
+  for (const existing of await schedulingReconcileQueue.getRepeatableJobs()) {
+    if (existing.every !== null && Number(existing.every) !== everyMs) {
+      await schedulingReconcileQueue.removeRepeatableByKey(existing.key);
+    }
+  }
+  await schedulingReconcileQueue.add(
+    QUEUE_NAMES.SCHEDULING_RECONCILE,
+    {},
+    { jobId: "scheduling-reconcile", repeat: { every: everyMs }, removeOnComplete: true, removeOnFail: true },
+  );
+  // …and once right now, so a restart recovers missing/overdue work immediately.
+  await schedulingReconcileQueue.add(QUEUE_NAMES.SCHEDULING_RECONCILE, {}, { removeOnComplete: true, removeOnFail: true });
 }
 
 void registerScheduledScans().catch((err) => logger.error({ err }, "failed to register scheduled scan jobs"));
@@ -250,6 +293,7 @@ const readiness = {
   analyticsSyncScan: false,
   tokenRefresh: false,
   tokenRefreshScan: false,
+  schedulingReconcile: false,
 };
 function isReady(): boolean {
   return (
@@ -262,7 +306,8 @@ function isReady(): boolean {
     readiness.analyticsSync &&
     readiness.analyticsSyncScan &&
     readiness.tokenRefresh &&
-    readiness.tokenRefreshScan
+    readiness.tokenRefreshScan &&
+    readiness.schedulingReconcile
   );
 }
 
@@ -316,6 +361,11 @@ tokenRefreshScanWorker.on("ready", () => {
   logger.info("token-refresh-scan worker ready and connected to Redis");
 });
 
+schedulingReconcileWorker.on("ready", () => {
+  readiness.schedulingReconcile = true;
+  logger.info("scheduling-reconcile worker ready and connected to Redis");
+});
+
 const healthServer = http.createServer((req, res) => {
   if (req.url === "/health") {
     const ready = isReady();
@@ -355,6 +405,9 @@ async function shutdown(signal: string) {
     tokenRefreshQueue.close(),
     tokenRefreshScanWorker.close(),
     tokenRefreshScanQueue.close(),
+    schedulingReconcileWorker.close(),
+    schedulingReconcileQueue.close(),
+    schedulingPort.close(),
     closeScheduledProducers(),
     connection.quit(),
     prisma.$disconnect(),

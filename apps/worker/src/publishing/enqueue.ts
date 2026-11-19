@@ -3,6 +3,11 @@ import { Queue } from "bullmq";
 import { loadEnv } from "@socialith/config";
 import { QUEUE_NAMES, type PublishingJobData, type PublishStatusPollJobData } from "@socialith/types";
 import { logger } from "../logger.js";
+import {
+  PUBLISH_JOB_OPTIONS,
+  PUBLISH_STATUS_POLL_INTERVAL_MS,
+  PUBLISH_STATUS_POLL_JOB_OPTIONS,
+} from "./job-options.js";
 
 /**
  * A small dedicated producer, symmetric with apps/api/src/lib/queue.ts —
@@ -26,7 +31,6 @@ connection.on("error", (err) => {
 const publishingQueue = new Queue<PublishingJobData>(QUEUE_NAMES.PUBLISHING, { connection });
 const publishStatusPollQueue = new Queue<PublishStatusPollJobData>(QUEUE_NAMES.PUBLISH_STATUS_POLL, { connection });
 
-const PUBLISH_JOB_OPTIONS = { attempts: 4, backoff: { type: "exponential", delay: 10_000 } } as const;
 
 /**
  * Deterministic `jobId: contentTargetId` — this is the idempotency
@@ -50,9 +54,6 @@ export async function enqueuePublishingJob(contentTargetId: string): Promise<voi
   );
 }
 
-/** First poll delay and the fixed interval between subsequent polls — TikTok allows 30 status-fetch requests/minute per user token; 15s keeps this comfortably under that even with several targets polling the same account. */
-const PUBLISH_STATUS_POLL_INTERVAL_MS = 15_000;
-
 /**
  * Deterministic `jobId: contentTargetId`, same reasoning as
  * enqueuePublishingJob — a target can only ever have one poll in flight.
@@ -67,14 +68,7 @@ export async function enqueuePublishStatusPoll(contentTargetId: string, attempt:
     {
       jobId: contentTargetId,
       delay: PUBLISH_STATUS_POLL_INTERVAL_MS,
-      // A real transient error (network blip, TikTok rate-limited/5xx)
-      // during one poll gets BullMQ's own retry before the processor's
-      // own attempt-counter logic (up to MAX_POLL_ATTEMPTS re-enqueues
-      // for "still processing") ever comes into play — the two are
-      // orthogonal: this is retrying one HTTP call, attempt/MAX_POLL_ATTEMPTS
-      // is spacing out repeated real status checks over time.
-      attempts: 3,
-      backoff: { type: "exponential", delay: 5_000 },
+      ...PUBLISH_STATUS_POLL_JOB_OPTIONS,
     },
   );
 }
