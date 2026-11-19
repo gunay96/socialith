@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { prisma } from "@socialith/database";
 import { decryptToken, hashPassword, parseEncryptionKey } from "@socialith/auth";
+import { logger } from "../logger.js";
 import { authenticateWithPassword } from "../services/auth.service.js";
 import { connectAccount } from "../services/social-account.service.js";
 import { listCampaigns } from "../repositories/campaign.repository.js";
@@ -63,7 +64,7 @@ suite("MySQL integration (real server, real migration, real code)", () => {
     it("reports the server version (recorded for the compatibility matrix)", async () => {
       const rows = await prisma.$queryRaw<{ v: string }[]>`SELECT VERSION() AS v`;
       const version = rows[0]?.v ?? "";
-      console.info(`[mysql-integration] server version: ${version}`);
+      logger.info({ suite: "mysql-integration", serverVersion: version }, "server version (compatibility matrix)");
       expect(version).toMatch(/^(8\.0|8\.4|5\.7)\./);
     });
 
@@ -258,7 +259,10 @@ suite("MySQL integration (real server, real migration, real code)", () => {
       // MySQL has no native Prisma upsert, so a lost race may surface as P2002 —
       // that is the only acceptable failure, and it is reported, not hidden.
       for (const r of rejected) expect(r.reason).toMatchObject({ code: "P2002" });
-      console.info(`[mysql-integration] concurrent upserts: ${results.length - rejected.length} ok, ${rejected.length} lost-race P2002`);
+      logger.info(
+        { suite: "mysql-integration", ok: results.length - rejected.length, lostRaceP2002: rejected.length },
+        "concurrent upserts",
+      );
       expect(await prisma.socialAccount.count({ where: { organizationId: org.id } })).toBe(1);
     });
   });
