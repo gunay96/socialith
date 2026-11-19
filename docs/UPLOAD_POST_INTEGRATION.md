@@ -1,7 +1,81 @@
-# Upload-Post Integration Design
+# Upload-Post Integration
 
-Status: **design only — nothing implemented.** Upload-Post is a first-class publishing
-provider, behind a provider-independent layer, owned and orchestrated by the Socialith backend.
+Upload-Post is a first-class publishing provider, owned and orchestrated by the Socialith backend.
+
+> **Status (Phase 2, branch `phase2-uploadpost`): implemented and tested against the in-repo contract double — never yet run
+> against the live service.** The first sections below are the original pre-implementation design (2026-11-19); where the
+> implementation differs, **§A (as built)** is authoritative. Companion documents:
+> `UPLOAD_POST_API_MAPPING.md` (every endpoint, field and its verification status), `UPLOAD_POST_SETUP.md` (how the owner
+> configures it), `UPLOAD_POST_TESTING.md` (what is tested, how, and what only a live key can prove), `PHASE2_CHECKPOINT.md`.
+
+## A. As built (Phase 2)
+
+### A.1 Layers and where the code lives
+
+| Layer | Code | Responsibility |
+|---|---|---|
+| Provider client | `packages/upload-post` | HTTP, auth, timeouts, retry of idempotent reads, rate-limit handling, structured errors, normalization, webhook signature verification, contract double. No DB, no framework. |
+| Worker | `apps/worker/src/upload-post/*`, `processors/upload-post.processor.ts` | Read-only synchronization, publishing (`UPLOAD_POST` destinations), status reconciliation, hybrid-scheduling sweep. BullMQ queue `upload-post`. |
+| API | `apps/api/src/{routes,controllers,services}/upload-post*`, `lib/upload-post.ts` | Dashboard endpoints, mappings, destinations, TikTok music mappings, the signed webhook. Enqueues work; never publishes itself. |
+| Dashboard | `apps/web/src/app/(app)/upload-post/*` | Eight pages (Overview, Profiles, Accounts, Mapping, Publishing history, Scheduled jobs, Provider health, Plan & usage). |
+
+The pre-existing publishing path is unchanged: native TikTok/Instagram/YouTube providers, `PlatformConnection` tokens, the
+publishing/poll processors. A destination chooses its route with `SocialAccount.publishingProvider` (`NATIVE` default, `UPLOAD_POST`).
+
+### A.2 The five concepts (never conflated)
+
+1. **Upload-Post Profile** (`UploadPostProfile`): the provider's container (`username`, immutable). Holds at most one account per platform.
+2. **Connected Platform Account** (`UploadPostConnectedAccount`): one platform account inside a profile. Keyed by the provider's **stable account id**
+   (`social_accounts.<platform>.username`; for TikTok the app-scoped `open_id`). The public `handle` is display data and can change.
+3. **ManagedPage** (`ManagedPage`): a Socialith thematic page. Minimal label here — the Page Network is Phase 4.
+4. **Creator** (`Creator`): a Socialith creator/artist. Minimal here.
+5. **Publishing Destination**: a `SocialAccount` with `publishingProvider = UPLOAD_POST`, linked 1:1 to a connected account. Created only by an
+   explicit admin action, never by synchronization.
+
+Mappings are Socialith-side (`UploadPostProfile.managedPageId`, `UploadPostConnectedAccount.creatorId`); synchronization never writes them.
+
+### A.3 Synchronization (read-only, never destructive)
+
+`GET /uploadposts/users` → profiles + accounts, every 30 min (configurable), on demand from the dashboard, and after a connection-change webhook.
+Idempotent (unique `(organization, username)` and `(profile, platform)`; races tolerated). Upstream disappearance → `REMOVED` / `DISCONNECTED`, rows kept.
+A failed or suspiciously empty answer (≥ 5 known profiles, none returned) changes nothing. If the stable id behind a (profile, platform) **changes**, the
+destination link is cleared, the destination is flagged `ERROR`, an audit row is written, history is kept, and nothing re-attaches by itself.
+Plan and profile limit are stored from what the provider reports at each sync — never a constant (the 225 of the Business plan is not in the code).
+
+### A.4 Publishing and correlation
+
+One `UploadPostPublication` per ContentTarget, created **before** the provider is called. It carries `external_id = socialith:target:<id>:g<generation>`,
+`request_id`, and an `Idempotency-Key`, all fixed per generation. Always `async_upload=true`. Correlation is by `external_id` (the provider documents that
+titles are editable and `external_id` is only a label — so it is never relied on for duplicate prevention). Duplicate prevention is: unique row +
+Idempotency-Key (24 h at the provider) + **asking the provider by `request_id` before any resend** after a timeout or redelivery. A deliberate retry of a
+failed target is a new generation = a new provider job. Results arrive via the status poll, the sweep, or a verified webhook (all converge on one function).
+
+### A.5 Hybrid scheduling
+
+Socialith's database owns the schedule. With `UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED=true` (default **false**), a target due within the window (default 48 h, never
+closer than 10 min) is given to the provider's scheduler (`scheduled_date` → `job_id`, stored). While provider-owned, every Socialith mechanism skips it
+(`scheduling/ownership.ts`: the content-scheduling job, the stale hold, the reconciler) — **a target is never scheduled in both systems**. The sweep (every
+minute) pushes Socialith-side changes: reschedule → `PATCH /schedule/{job_id}`; unschedule/leaves the window → `DELETE`; an unknown hand-off outcome is
+resolved by `external_id` (adopt, or release back to Socialith). Presigned (short-lived) media URLs are never handed to a provider scheduler. Any doubt
+resolves in favour of Socialith owning the target.
+
+### A.6 TikTok music
+
+`SoundMusicMapping` links a Socialith `Sound` to a provider `tiktok_music_id`. Lookup is capability-gated (`music`) and clearly labelled as Commercial Music
+Library **chart** data, not the whole catalogue. A mapping is `UNVERIFIED` until checked against chart data; **rights are a separate human confirmation**.
+At publish time music is attached only if the mapping is verified available, rights-confirmed, verified ≤ 30 days ago and the account has the capability;
+otherwise the post goes out **without** music and the publication `notes` says why. The id actually sent is recorded (`tiktokMusicId`).
+
+### A.7 What is NOT in this phase
+
+Profile creation (client method exists, mock-tested, deliberately not exposed), analytics sync, comments/DMs, other platforms as destinations
+(they are synchronized and shown, not publishable), Page Network, AI Studio, large-scale publishing, any real public publication.
+
+---
+
+## Original design (2026-11-19, pre-implementation)
+
+Status of what follows: design; sections that were marked [UNVERIFIED] are re-evaluated in `UPLOAD_POST_API_MAPPING.md`.
 
 ## 0. Evidence and its limits (read first)
 
