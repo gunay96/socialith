@@ -3,7 +3,7 @@
 Branch `phase2-uploadpost` (base `main` @ `f061229`, the merged Phase 1). **Not merged. Not pushed as complete.**
 This file is updated after every significant milestone so a session can always resume from it.
 
-## 1. Where the work stands (milestone 3 — API and webhook complete; dashboard next)
+## 1. Where the work stands (milestone 4 — dashboard complete; docs, validation and report remain)
 
 | # | Unit | Status |
 |---|---|---|
@@ -15,7 +15,7 @@ This file is updated after every significant milestone so a session can always r
 | 6 | API endpoints (overview, health, plan, profiles, accounts, mapping, destinations, publications, scheduled, ManagedPage/Creator, TikTok music + mappings) | **done**, real express app + MySQL + Redis tests |
 | 7 | Webhook endpoint (raw-body signature verification, dedupe, enqueue reconcile) | **done**, 7 tests |
 | 8 | ManagedPage / Creator mapping (API) | **done** |
-| 9 | Dashboard pages (8) | pending |
+| 9 | Dashboard pages (Overview, Profiles, Accounts, Mapping, Publishing history, Scheduled jobs, Provider health, Plan & usage) | **done**; verified in a browser against the real API + MySQL + contract double (login, all 8 pages, enable-destination click), no console errors |
 | 10 | API integration tests, docs (`UPLOAD_POST_INTEGRATION/API_MAPPING/SETUP/TESTING.md`), CI/Docker re-validation, final report | pending |
 
 ## 2. Git state

@@ -72,6 +72,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
             <NavLink href="/campaigns" label="Campaigns" />
             <NavLink href="/content" label="Content" />
             <NavLink href="/sounds" label="Music / Sounds" />
+            <NavLink href="/upload-post" label="Upload-Post" />
             <NavLink href="/team" label="Team" />
           </div>
           <div className="flex flex-col gap-2 border-t border-border pt-4">
