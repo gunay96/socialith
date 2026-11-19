@@ -48,5 +48,6 @@ packages/database/prisma/migrations/dev/
 # Local tool config and backups
 .claude/
 /backups/
+/infra/vps/backups/
 *.sql.gz
 *.dump

@@ -1,0 +1,43 @@
+# Reverse proxy + automatic HTTPS (Let's Encrypt) for the single-domain
+# topology. Values come from the container environment (docker-compose.yml):
+#   APP_DOMAIN          e.g. app.example.com   (DNS A/AAAA must point at this VPS — created by the owner)
+#   ACME_EMAIL          Let's Encrypt contact
+#   CADDY_GLOBAL_EXTRA  empty in production; the local verification stack sets "local_certs"
+#                       so Caddy uses its internal CA instead of contacting Let's Encrypt.
+{
+	email {$ACME_EMAIL}
+	{$CADDY_GLOBAL_EXTRA:}
+}
+
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# apps/api caps uploads at 200 MB (multer); leave a little headroom for multipart overhead.
+	request_body {
+		max_size 210MB
+	}
+
+	handle /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle /media/* {
+		reverse_proxy api:4000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
