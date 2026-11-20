@@ -14,6 +14,7 @@ import {
   type MetricsRollup,
 } from "@/lib/api";
 import { useCurrentUser } from "@/lib/auth-context";
+import { CampaignPageNetwork } from "./campaign-pages";
 
 export default function CampaignDetailPage({ params }: { params: { id: string } }) {
   const me = useCurrentUser();
@@ -84,6 +85,8 @@ export default function CampaignDetailPage({ params }: { params: { id: string } 
         </div>
         {saveError && <p className="mt-2 text-sm text-red-400">{saveError}</p>}
       </div>
+
+      <CampaignPageNetwork campaignId={params.id} />
 
       <h2 className="mb-3 text-sm font-medium text-muted">Performance (published posts only)</h2>
       {metrics && (
