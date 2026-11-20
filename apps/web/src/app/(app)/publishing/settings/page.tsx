@@ -66,7 +66,7 @@ export default function PublishingSettingsPage() {
       <span className="text-xs text-muted">{hint}</span>
     </label>
   );
-  const check = (key: "requireApproval" | "allowSelfApproval" | "autoScheduleOnApproval", label: string, hint: string) => (
+  const check = (key: "requireApproval" | "ownerSelfApproval" | "adminSelfApproval" | "autoScheduleOnApproval", label: string, hint: string) => (
     <label className="flex items-start gap-3 text-sm">
       <input type="checkbox" className="mt-1" disabled={!isAdmin} checked={draft[key]} onChange={(e) => set({ [key]: e.target.checked } as Partial<Draft>)} />
       <span>{label}<span className="block text-xs text-muted">{hint}</span></span>
@@ -82,9 +82,10 @@ export default function PublishingSettingsPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Approval">
           <div className="flex flex-col gap-4">
-            {check("requireApproval", "Require approval before scheduling", "Every destination must be approved (individually) before it can be scheduled — including through the older content scheduling. Content edited after approval loses its approval.")}
-            {check("allowSelfApproval", "Allow approving what you submitted yourself", "Switch off to force a second admin to approve. Every approval records who approved and when.")}
-            {check("autoScheduleOnApproval", "Schedule automatically once approved (organization default)", "Only at the date and time a person already planned for that destination — never an invented time — and only if it passes the scheduling checks. A campaign can override this below.")}
+            {check("requireApproval", "Require approval before scheduling (on by default)", "Every destination must be approved (individually) before it can be scheduled or published — through any path, including the older content scheduling. Content edited after approval loses its approval. Switching this off is an explicit, audited choice that is never undone silently.")}
+            {check("ownerSelfApproval", "The owner may approve their own submissions", "On by default. A self-approval is always recorded as such (audit log and publication history), whatever this setting says.")}
+            {check("adminSelfApproval", "Admins may approve their own submissions", "Off by default: an admin's own submission needs the owner or another admin. A creator can never approve content (that role arrives with the Creator portal).")}
+            {check("autoScheduleOnApproval", "Schedule automatically once approved (organization default)", "Publishing is automatic only AFTER the required approval: at the date and time a person already planned for that destination — never an invented time — and only if it passes the scheduling checks. A campaign can override this below.")}
           </div>
         </Card>
 

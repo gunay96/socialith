@@ -16,9 +16,19 @@ export interface Issue {
   field: string;
   message: string;
 }
+export interface MediaVerification {
+  status: "VERIFIED" | "PARTIAL" | "UNVERIFIED" | "NONE";
+  kind: "VIDEO" | "IMAGES" | null;
+  known: string[];
+  unknown: string[];
+}
 export interface Validation {
+  /** No ERROR: nothing is known to be wrong. NOT the same as "validated" — see fullyValidated. */
   ok: boolean;
   issues: Issue[];
+  media: MediaVerification;
+  /** ok AND every media fact the rules need is known. */
+  fullyValidated: boolean;
 }
 
 export interface Pub {
@@ -67,7 +77,7 @@ export interface PubDetail extends Pub {
   submittedBy: { id: string; name: string | null } | null;
   approvedBy: { id: string; name: string | null } | null;
   providerOwned: boolean;
-  content: { id: string; caption: string | null; status: string; siblingPublications: number; assets: { id: string; type: string; platform: string | null; url: string; metadata: unknown }[] };
+  content: { id: string; caption: string | null; status: string; siblingPublications: number; assets: { id: string; type: string; platform: string | null; url: string; metadata: unknown; facts: { width: number | null; height: number | null; durationSec: number | null; sizeBytes: number | null } }[] };
   validation: Validation | null;
   events: { id: string; type: string; fromState: string | null; toState: string | null; reason: string | null; createdAt: string; actor: { id: string; name: string } | null }[];
   attempts: { id: string; attemptNumber: number; status: string; errorCode: string | null; errorMessage: string | null; retryable: boolean | null; httpStatusCode: number | null; startedAt: string; completedAt: string; externalPostUrl: string | null }[];
@@ -108,7 +118,8 @@ export interface PublishingSettings {
   source: "default" | "configured";
   timezone: string;
   requireApproval: boolean;
-  allowSelfApproval: boolean;
+  ownerSelfApproval: boolean;
+  adminSelfApproval: boolean;
   autoScheduleOnApproval: boolean;
   duplicateGuard: "BLOCK" | "WARN" | "OFF";
   similarityThresholdPct: number;
@@ -168,6 +179,41 @@ export function IssueList({ issues, compact = false }: { issues: Issue[]; compac
         </li>
       ))}
     </ul>
+  );
+}
+
+/**
+ * The honest summary of a validation. "No problems" is never shown as "validated" unless the media facts the rules need
+ * are actually known: until dimensions, duration and file size are recorded (Media Packs, Phase 5 — TD-49) the media is
+ * reported as NOT verified, with exactly what is missing.
+ */
+export function ValidationSummary({ validation, withIssues = true }: { validation: Validation | null | undefined; withIssues?: boolean }) {
+  if (!validation) return null;
+  const errors = validation.issues.filter((i) => i.severity === "ERROR");
+  const m = validation.media;
+  return (
+    <div className="flex flex-col gap-2 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        {errors.length > 0 ? (
+          <Chip tone={TONES.RED}>{errors.length} PROBLEM{errors.length === 1 ? "" : "S"} TO FIX</Chip>
+        ) : validation.fullyValidated ? (
+          <Chip tone={TONES.GREEN}>ALL CHECKS PASSED · MEDIA VERIFIED</Chip>
+        ) : (
+          <Chip tone={TONES.AMBER}>NOT FULLY VALIDATED</Chip>
+        )}
+        {m.status !== "NONE" && (
+          <Chip tone={m.status === "VERIFIED" ? TONES.GREEN : TONES.AMBER} title="What is known about the media file's own metadata">
+            media {m.status === "VERIFIED" ? "verified" : m.status === "PARTIAL" ? "partly verified" : "UNVERIFIED"}
+          </Chip>
+        )}
+      </div>
+      {errors.length === 0 && !validation.fullyValidated && m.unknown.length > 0 && (
+        <p className="text-xs text-amber-400">
+          Account, provider, caption and limit checks found no problem, but the media was <strong>not</strong> fully checked: {m.unknown.join(", ")} {m.unknown.length === 1 ? "is" : "are"} unknown{m.known.length ? ` (checked: ${m.known.join(", ")})` : ""}. Do not read “no problems” as “the media meets the platform limits”.
+        </p>
+      )}
+      {withIssues && validation.issues.length > 0 && <IssueList issues={validation.issues} compact />}
+    </div>
   );
 }
 

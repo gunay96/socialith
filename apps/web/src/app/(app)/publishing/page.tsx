@@ -28,8 +28,8 @@ export default function PublishingOverviewPage() {
         <>
           {!data.approval.required && (
             <Banner tone="info">
-              Approval is <strong>not required</strong> for this organization{data.approval.source === "default" ? " (Publishing Settings have never been saved)" : ""}: publications can be scheduled straight from draft. Turn it on in{" "}
-              <Link href="/publishing/settings" className="underline">Publishing Settings</Link> so that every destination must be approved before it can be scheduled.
+              Approval is <strong>switched off</strong> for this organization (an explicit Publishing Settings choice): publications can be scheduled straight from draft. Turn it back on in{" "}
+              <Link href="/publishing/settings" className="underline">Publishing Settings</Link> so that every destination must be approved before it can be scheduled — approval is on by default.
             </Banner>
           )}
           <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">

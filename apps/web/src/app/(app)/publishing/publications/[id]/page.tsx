@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Banner, Card, Chip, TONES, useFetch } from "@/lib/upload-post";
-import { IssueList, OwnerChip, PLATFORM_LABEL, PublicationActions, StateBadge, fmt, useTimezone, type PubDetail } from "@/lib/publishing";
+import { OwnerChip, PLATFORM_LABEL, PublicationActions, StateBadge, ValidationSummary, fmt, useTimezone, type PubDetail } from "@/lib/publishing";
 
 function Row({ k, children, mono = false }: { k: string; children: React.ReactNode; mono?: boolean }) {
   return (
@@ -11,6 +11,15 @@ function Row({ k, children, mono = false }: { k: string; children: React.ReactNo
       <dt className="text-muted">{k}</dt>
       <dd className={`break-all ${mono ? "font-mono text-xs" : ""}`}>{children}</dd>
     </div>
+  );
+}
+
+/** A media fact: shown plainly when known, and clearly as UNKNOWN (never hidden, never guessed) when not. */
+function Fact({ label, value }: { label: string; value: string | null }) {
+  return value ? (
+    <span><span className="text-muted">{label}:</span> {value}</span>
+  ) : (
+    <span className="text-amber-400"><span className="text-muted">{label}:</span> unknown — not verified</span>
   );
 }
 
@@ -68,7 +77,20 @@ export default function PublicationDetailPage() {
           </div>
           <div className="mt-3">
             <div className="mb-1 text-xs uppercase tracking-wide text-muted">Media</div>
-            {d.content.assets.length ? d.content.assets.map((a) => <div key={a.id} className="font-mono text-xs">{a.type}{a.platform ? ` (${a.platform})` : ""} · {a.url}</div>) : <span className="text-sm text-muted">No media attached.</span>}
+            {d.content.assets.length ? d.content.assets.map((a) => (
+              <div key={a.id} className="mb-2 text-xs">
+                <div className="font-mono">{a.type}{a.platform ? ` (${a.platform})` : ""} · {a.url}</div>
+                <div className="mt-0.5 flex flex-wrap gap-x-3">
+                  {(a.type === "VIDEO" || a.type === "IMAGE") ? (
+                    <>
+                      <Fact label="dimensions" value={a.facts.width && a.facts.height ? `${a.facts.width}×${a.facts.height}` : null} />
+                      {a.type === "VIDEO" && <Fact label="duration" value={a.facts.durationSec != null ? `${a.facts.durationSec} s` : null} />}
+                      <Fact label="file size" value={a.facts.sizeBytes != null ? `${(a.facts.sizeBytes / 1_048_576).toFixed(1)} MB` : null} />
+                    </>
+                  ) : <span className="text-muted">not publishable on its own</span>}
+                </div>
+              </div>
+            )) : <span className="text-sm text-muted">No media attached.</span>}
           </div>
           {d.provider?.notes && <p className="mt-3 text-xs text-amber-400">{d.provider.notes}</p>}
         </Card>
@@ -76,7 +98,7 @@ export default function PublicationDetailPage() {
 
       {d.validation && (
         <Card title="Platform checks">
-          {d.validation.issues.length === 0 ? <p className="text-sm text-green-400">No problems found.</p> : <IssueList issues={d.validation.issues} />}
+          <ValidationSummary validation={d.validation} />
         </Card>
       )}
 

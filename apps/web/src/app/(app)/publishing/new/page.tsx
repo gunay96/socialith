@@ -17,6 +17,7 @@ import {
   toLocalInputValue,
   useTimezone,
   type DestinationPage,
+  ValidationSummary,
   type Issue,
   type Pub,
   type PubDetail,
@@ -36,11 +37,11 @@ interface Created {
 
 function ResultRow({ initial, tz }: { initial: Created; tz: string }) {
   const [pub, setPub] = useState<Pub>(initial.publication);
-  const [issues, setIssues] = useState<Issue[]>(initial.validation.issues);
+  const [validation, setValidation] = useState<Validation>(initial.validation);
   async function refresh() {
     const d = await apiGet<PubDetail>(`/api/publishing/publications/${pub.id}`);
     setPub(d);
-    setIssues(d.validation?.issues ?? []);
+    if (d.validation) setValidation(d.validation);
   }
   return (
     <li className="rounded border border-border p-3">
@@ -50,7 +51,7 @@ function ResultRow({ initial, tz }: { initial: Created; tz: string }) {
         <StateBadge state={pub.state} />
         <Link href={`/publishing/publications/${pub.id}`} className="ml-auto text-xs underline">Open</Link>
       </div>
-      {issues.length > 0 ? <div className="mb-2"><IssueList issues={issues} compact /></div> : <p className="mb-2 text-sm text-green-400">Passes the platform checks.</p>}
+      <div className="mb-2"><ValidationSummary validation={validation} /></div>
       <PublicationActions pub={pub} tz={tz} onChanged={() => void refresh()} size="sm" />
     </li>
   );

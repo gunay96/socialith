@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Banner, Card, Chip, TONES, useFetch } from "@/lib/upload-post";
-import { IssueList, PLATFORM_LABEL, PublicationActions, StateBadge, fmt, useTimezone, type Pub, type PubDetail, type PubPage } from "@/lib/publishing";
+import { PLATFORM_LABEL, ValidationSummary, PublicationActions, StateBadge, fmt, useTimezone, type Pub, type PubDetail, type PubPage } from "@/lib/publishing";
 
 function ReviewCard({ pub, tz, onChanged }: { pub: Pub; tz: string; onChanged: () => void }) {
   const [open, setOpen] = useState(false);
@@ -34,7 +34,7 @@ function ReviewCard({ pub, tz, onChanged }: { pub: Pub; tz: string; onChanged: (
             <div className="flex flex-col gap-3 text-sm">
               <div>
                 <div className="mb-1 text-xs uppercase tracking-wide text-muted">Platform checks</div>
-                {d.validation && d.validation.issues.length > 0 ? <IssueList issues={d.validation.issues} compact /> : <span className="text-green-400">No problems found.</span>}
+                <ValidationSummary validation={d.validation} />
               </div>
               <div>
                 <div className="mb-1 text-xs uppercase tracking-wide text-muted">Media</div>
