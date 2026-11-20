@@ -59,6 +59,9 @@ export const QUEUE_NAMES = {
   // jobs, holds stale scheduled content, recovers stuck PUBLISHING targets
   // (apps/worker/src/scheduling).
   SCHEDULING_RECONCILE: "scheduling-reconcile",
+  // Phase 2: Upload-Post provider work (profile sync, hand-off/drift/status sweep,
+  // webhook-triggered reconciliation) - apps/worker/src/upload-post.
+  UPLOAD_POST: "upload-post",
   TOKEN_REFRESH: "token-refresh",
   TOKEN_REFRESH_SCAN: "token-refresh-scan",
   NOTIFICATIONS: "notifications",
@@ -136,3 +139,18 @@ export interface PublishStatusPollJobData {
   contentTargetId: string;
   attempt: number;
 }
+
+/**
+ * Payload for QUEUE_NAMES.UPLOAD_POST jobs. Repeatable jobs carry only `kind`.
+ *  - sync       provider profiles/accounts -> database (read-only towards the provider)
+ *  - sweep      hand-off to the provider scheduler, drift (cancel/reschedule) and status reconciliation
+ *  - reconcile  triggered by a verified webhook: re-read the authoritative provider status for ONE
+ *               publication (the webhook payload is only a hint, never trusted for state changes)
+ */
+export type UploadPostJobData =
+  | { kind: "sync"; trigger: "SCHEDULED" | "MANUAL" | "STARTUP"; organizationId?: string }
+  | { kind: "sweep" }
+  | { kind: "reconcile"; requestId?: string; jobId?: string; externalId?: string; deliveryId?: string };
+
+/** Deterministic BullMQ job id for an on-demand Upload-Post sync (one in flight at a time). */
+export const UPLOAD_POST_MANUAL_SYNC_JOB_ID = "upload-post-manual-sync";

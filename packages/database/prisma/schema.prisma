@@ -65,20 +65,27 @@ model Organization {
   status    OrganizationStatus @default(ACTIVE)
   timezone  String             @default("Europe/Istanbul")
   language  String             @default("tr")
-  createdAt DateTime           @map("created_at") @default(now())
-  updatedAt DateTime           @map("updated_at") @updatedAt
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
 
-  users          User[]
-  auditLogs      AuditLog[]
-  invitations    Invitation[]
-  socialAccounts SocialAccount[]
-  campaigns      Campaign[]
-  content        Content[]
-  generationJobs ContentGenerationJob[]
-  renderJobs     VideoRenderJob[]
-  publishAttempts PublishAttempt[]
-  sounds          Sound[]
-  metricsSnapshots PostMetricsSnapshot[]
+  users                  User[]
+  auditLogs              AuditLog[]
+  invitations            Invitation[]
+  socialAccounts         SocialAccount[]
+  campaigns              Campaign[]
+  content                Content[]
+  generationJobs         ContentGenerationJob[]
+  renderJobs             VideoRenderJob[]
+  publishAttempts        PublishAttempt[]
+  sounds                 Sound[]
+  metricsSnapshots       PostMetricsSnapshot[]
+  managedPages           ManagedPage[]
+  creators               Creator[]
+  uploadPostProfiles     UploadPostProfile[]
+  uploadPostAccounts     UploadPostConnectedAccount[]
+  uploadPostSyncRuns     UploadPostSyncRun[]
+  uploadPostPublications UploadPostPublication[]
+  soundMusicMappings     SoundMusicMapping[]
 
   @@map("organizations")
 }
@@ -98,16 +105,16 @@ model User {
   // session middleware compares the value embedded in the session
   // against this column on every request.
   sessionVersion Int        @default(0) @map("session_version")
-  createdAt      DateTime   @map("created_at") @default(now())
-  updatedAt      DateTime   @map("updated_at") @updatedAt
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
 
-  organization         Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  auditLogs            AuditLog[]
-  sentInvitations      Invitation[]          @relation("InvitedBy")
-  passwordResetTokens  PasswordResetToken[]
-  connectedAccounts    SocialAccount[]
-  createdCampaigns     Campaign[]
-  createdContent       Content[]
+  organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  auditLogs               AuditLog[]
+  sentInvitations         Invitation[]           @relation("InvitedBy")
+  passwordResetTokens     PasswordResetToken[]
+  connectedAccounts       SocialAccount[]
+  createdCampaigns        Campaign[]
+  createdContent          Content[]
   requestedGenerationJobs ContentGenerationJob[]
   requestedRenderJobs     VideoRenderJob[]
   createdSounds           Sound[]
@@ -124,7 +131,7 @@ model AuditLog {
   targetType     String?  @map("target_type")
   targetId       String?  @map("target_id")
   metadataJson   Json?    @map("metadata_json")
-  createdAt      DateTime @map("created_at") @default(now())
+  createdAt      DateTime @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -146,7 +153,7 @@ model Invitation {
   expiresAt      DateTime  @map("expires_at")
   acceptedAt     DateTime? @map("accepted_at")
   invitedById    String    @map("invited_by_id")
-  createdAt      DateTime  @map("created_at") @default(now())
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   invitedBy    User         @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Restrict)
@@ -172,7 +179,7 @@ model PasswordResetToken {
   tokenHash String    @unique @map("token_hash")
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @map("created_at") @default(now())
+  createdAt DateTime  @default(now()) @map("created_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -209,37 +216,43 @@ enum SocialAccountStatus {
 // the one real duplicate-connection case that matters: the same org
 // connecting the same external account twice.
 model SocialAccount {
-  id                String              @id @default(cuid())
-  organizationId    String              @map("organization_id")
-  platform          Platform
-  externalAccountId String              @map("external_account_id")
-  handle            String
-  displayName       String              @map("display_name")
+  id                 String                 @id @default(cuid())
+  organizationId     String                 @map("organization_id")
+  platform           Platform
+  externalAccountId  String                 @map("external_account_id")
+  handle             String
+  displayName        String                 @map("display_name")
   // @db.Text: MySQL's default VARCHAR(191) is a real truncation risk for
   // a CDN avatar URL carrying a signed query string — Postgres's plain
   // `text` never had this cap. Same reasoning for every other
   // URL/free-text field in this schema switched to @db.Text below (see
   // this migration's report for the full list and why).
-  avatarUrl         String?             @map("avatar_url") @db.Text
-  status            SocialAccountStatus @default(CONNECTED)
-  followerCount     Int?                @map("follower_count")
-  lastSyncedAt      DateTime?           @map("last_synced_at")
+  avatarUrl          String?                @map("avatar_url") @db.Text
+  status             SocialAccountStatus    @default(CONNECTED)
+  followerCount      Int?                   @map("follower_count")
+  lastSyncedAt       DateTime?              @map("last_synced_at")
   // Set alongside `status: ERROR` so a broken connection is
   // human-readable (in the UI) and machine-actionable (future
   // refresh/publish retry logic) without a separate events table.
-  lastErrorMessage  String?             @map("last_error_message") @db.Text
+  lastErrorMessage   String?                @map("last_error_message") @db.Text
   // Escape hatch for provider-specific profile fields that don't warrant
   // their own typed column (bio, verified badge, profile URL, …) — same
   // role AuditLog.metadataJson already plays in this schema.
-  providerMetadata  Json?               @map("provider_metadata")
-  connectedById     String?             @map("connected_by_id")
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
+  providerMetadata   Json?                  @map("provider_metadata")
+  connectedById      String?                @map("connected_by_id")
+  // Phase 2: which publishing path this destination uses. NATIVE = the platform's own
+  // API with the OAuth tokens in PlatformConnection (unchanged). UPLOAD_POST = published
+  // through the Upload-Post provider; the account then has no PlatformConnection and
+  // is linked 1:1 to an UploadPostConnectedAccount (this row IS the Publishing Destination).
+  publishingProvider PublishingProviderKind @default(NATIVE) @map("publishing_provider")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
 
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  connectedBy         User?               @relation(fields: [connectedById], references: [id], onDelete: SetNull)
-  platformConnection  PlatformConnection?
-  contentTargets      ContentTarget[]
+  organization       Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connectedBy        User?                       @relation(fields: [connectedById], references: [id], onDelete: SetNull)
+  platformConnection PlatformConnection?
+  contentTargets     ContentTarget[]
+  uploadPostAccount  UploadPostConnectedAccount?
 
   // Composite unique — see the model comment above for why this is
   // per-organization, not global.
@@ -397,13 +410,13 @@ model Content {
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
 
-  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  campaign     Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
-  sound        Sound?             @relation(fields: [soundId], references: [id], onDelete: SetNull)
-  createdBy    User?              @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  variations   ContentVariation[]
-  assets       ContentAsset[]
-  targets      ContentTarget[]
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  campaign       Campaign?              @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  sound          Sound?                 @relation(fields: [soundId], references: [id], onDelete: SetNull)
+  createdBy      User?                  @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  variations     ContentVariation[]
+  assets         ContentAsset[]
+  targets        ContentTarget[]
   generationJobs ContentGenerationJob[]
   renderJobs     VideoRenderJob[]
 
@@ -447,9 +460,10 @@ model Sound {
   createdAt        DateTime    @default(now()) @map("created_at")
   updatedAt        DateTime    @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  content      Content[]
+  organization  Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy     User?               @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  content       Content[]
+  musicMappings SoundMusicMapping[]
 
   @@index([organizationId, platform])
   @@index([organizationId, status])
@@ -502,7 +516,7 @@ model ContentAsset {
   metadata  Json?
   createdAt DateTime  @default(now()) @map("created_at")
 
-  content Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  content            Content          @relation(fields: [contentId], references: [id], onDelete: Cascade)
   renderJobsAsSource VideoRenderJob[] @relation("VideoRenderSourceAsset")
   renderJobsAsResult VideoRenderJob[] @relation("VideoRenderResultAsset")
 
@@ -519,20 +533,20 @@ model ContentAsset {
 // index below is chosen for exactly that future query, even though
 // nothing in Phase 05 runs it yet (no real publishing here).
 model ContentTarget {
-  id              String              @id @default(cuid())
-  contentId       String              @map("content_id")
-  socialAccountId String              @map("social_account_id")
-  status          ContentTargetStatus @default(PENDING)
-  scheduledAt     DateTime?           @map("scheduled_at")
-  publishedAt     DateTime?           @map("published_at")
+  id                  String              @id @default(cuid())
+  contentId           String              @map("content_id")
+  socialAccountId     String              @map("social_account_id")
+  status              ContentTargetStatus @default(PENDING)
+  scheduledAt         DateTime?           @map("scheduled_at")
+  publishedAt         DateTime?           @map("published_at")
   // Populated once real publishing exists (Phase 08) — e.g. the
   // provider's post ID, so analytics (Phase 09) can look it up.
-  externalPostId  String?             @map("external_post_id")
+  externalPostId      String?             @map("external_post_id")
   // A user-facing link to the live post, when the platform's publish
   // response includes or implies one (e.g. YouTube: derivable from the
   // video ID; Instagram/TikTok: not always returned synchronously).
-  externalPostUrl String?             @map("external_post_url") @db.Text
-  errorMessage    String?             @map("error_message") @db.Text
+  externalPostUrl     String?             @map("external_post_url") @db.Text
+  errorMessage        String?             @map("error_message") @db.Text
   // Phase 10 TikTok-review hardening: a real, honest caveat for a target
   // whose provider reported COMPLETE but that doesn't mean "live" — e.g.
   // TikTok's real Upload/Inbox flow (video.upload scope) delivers to the
@@ -540,26 +554,27 @@ model ContentTarget {
   // finish the post manually in the TikTok app. Null for a target whose
   // PUBLISHED status genuinely means live/public. See
   // apps/worker/src/publishing/types.ts's PublishStatusResult.deliveryNote.
-  deliveryNote    String?             @map("delivery_note") @db.Text
+  deliveryNote        String?             @map("delivery_note") @db.Text
   // Denormalized running count of PublishAttempt rows below — same
   // pattern as ContentGenerationJob/VideoRenderJob.attempts (Phase 07):
   // cheap idempotency/backoff checks without a COUNT query. The
   // individual attempts themselves (with their own error/response
   // detail) live in PublishAttempt, not duplicated here.
-  attemptCount    Int                 @default(0) @map("attempt_count")
+  attemptCount        Int                 @default(0) @map("attempt_count")
   // Phase 10: stamped at the *start* of every analytics-sync attempt
   // (success or failure) — what the analytics-sync-scan processor orders
   // by to spread out real re-syncs instead of hammering the same targets
   // every scan cycle. Distinct from PostMetricsSnapshot.fetchedAt, which
   // only exists on a successful sync.
-  lastAnalyticsSyncAt DateTime?       @map("last_analytics_sync_at")
-  createdAt       DateTime            @default(now()) @map("created_at")
-  updatedAt       DateTime            @updatedAt @map("updated_at")
+  lastAnalyticsSyncAt DateTime?           @map("last_analytics_sync_at")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
 
-  content       Content          @relation(fields: [contentId], references: [id], onDelete: Cascade)
-  socialAccount SocialAccount    @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
-  publishAttempts PublishAttempt[]
-  metricsSnapshots PostMetricsSnapshot[]
+  content               Content                @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  socialAccount         SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  publishAttempts       PublishAttempt[]
+  metricsSnapshots      PostMetricsSnapshot[]
+  uploadPostPublication UploadPostPublication?
 
   @@unique([contentId, socialAccountId])
   @@index([socialAccountId])
@@ -581,34 +596,34 @@ enum PublishAttemptStatus {
 // is denormalized from Content, matching how AuditLog/Content/ContentAsset
 // already carry it directly rather than requiring one.
 model PublishAttempt {
-  id              String                @id @default(cuid())
-  organizationId  String                @map("organization_id")
-  contentTargetId String                @map("content_target_id")
-  attemptNumber   Int                   @map("attempt_number")
-  status          PublishAttemptStatus
+  id               String               @id @default(cuid())
+  organizationId   String               @map("organization_id")
+  contentTargetId  String               @map("content_target_id")
+  attemptNumber    Int                  @map("attempt_number")
+  status           PublishAttemptStatus
   // Machine-readable classification (e.g. "CONFIGURATION_ERROR",
   // "AUTH_ERROR", "RATE_LIMITED", "PLATFORM_ERROR", "NETWORK_ERROR") —
   // see apps/worker/src/publishing/types.ts's PublishError. Null on a
   // SUCCEEDED attempt.
-  errorCode       String?               @map("error_code")
-  errorMessage    String?               @map("error_message") @db.Text
-  httpStatusCode  Int?                  @map("http_status_code")
+  errorCode        String?              @map("error_code")
+  errorMessage     String?              @map("error_message") @db.Text
+  httpStatusCode   Int?                 @map("http_status_code")
   // Whether this failure was classified as retryable at the time (5xx/
   // network/rate-limit) vs permanent (4xx auth/content/config) — kept
   // even though ContentTarget's own retry loop has already acted on it,
   // so a later audit doesn't have to re-derive the classification from
   // errorCode/httpStatusCode alone.
-  retryable       Boolean?
-  externalPostId  String?               @map("external_post_id")
-  externalPostUrl String?               @map("external_post_url") @db.Text
+  retryable        Boolean?
+  externalPostId   String?              @map("external_post_id")
+  externalPostUrl  String?              @map("external_post_url") @db.Text
   // Structured, safe response metadata only (provider request id, rate-
   // limit headers, …) — never the raw response body verbatim, and never
   // any credential. See apps/worker/src/publishing/types.ts.
   responseMetadata Json?                @map("response_metadata")
   rateLimitResetAt DateTime?            @map("rate_limit_reset_at")
-  startedAt       DateTime              @map("started_at")
-  completedAt     DateTime              @map("completed_at")
-  createdAt       DateTime              @default(now()) @map("created_at")
+  startedAt        DateTime             @map("started_at")
+  completedAt      DateTime             @map("completed_at")
+  createdAt        DateTime             @default(now()) @map("created_at")
 
   organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   contentTarget ContentTarget @relation(fields: [contentTargetId], references: [id], onDelete: Cascade)
@@ -652,23 +667,23 @@ enum VideoRenderOperation {
 // "provider not configured" errorMessage rather than a fabricated
 // success (per this phase's explicit "no fake success" rule).
 model ContentGenerationJob {
-  id             String                  @id @default(cuid())
-  organizationId String                  @map("organization_id")
-  contentId      String                  @map("content_id")
-  platform       Platform?
-  status         ContentGenerationStatus @default(PENDING)
-  attempts       Int                     @default(0)
-  errorMessage   String?                 @map("error_message") @db.Text
+  id                String                  @id @default(cuid())
+  organizationId    String                  @map("organization_id")
+  contentId         String                  @map("content_id")
+  platform          Platform?
+  status            ContentGenerationStatus @default(PENDING)
+  attempts          Int                     @default(0)
+  errorMessage      String?                 @map("error_message") @db.Text
   // One of @socialith/types' ERROR_CODES (e.g. CONFIGURATION_ERROR, RATE_LIMITED) — set alongside errorMessage so API/UI can normalize instead of string-matching.
-  errorCode      String?                 @map("error_code")
+  errorCode         String?                 @map("error_code")
   // Real token-usage/cost data from the AI provider's own response, when it returns one — {promptTokens, completionTokens, totalTokens, estimatedCostUsd}. Null when the provider doesn't report usage.
-  usageMetadata  Json?                   @map("usage_metadata")
-  resultVariationId String?              @map("result_variation_id")
-  requestedById  String?                 @map("requested_by_id")
-  startedAt      DateTime?               @map("started_at")
-  completedAt    DateTime?               @map("completed_at")
-  createdAt      DateTime                @default(now()) @map("created_at")
-  updatedAt      DateTime                @updatedAt @map("updated_at")
+  usageMetadata     Json?                   @map("usage_metadata")
+  resultVariationId String?                 @map("result_variation_id")
+  requestedById     String?                 @map("requested_by_id")
+  startedAt         DateTime?               @map("started_at")
+  completedAt       DateTime?               @map("completed_at")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   content      Content      @relation(fields: [contentId], references: [id], onDelete: Cascade)
@@ -744,4 +759,317 @@ model PostMetricsSnapshot {
   @@index([organizationId, fetchedAt])
   @@index([contentTargetId, fetchedAt])
   @@map("post_metrics_snapshots")
+}
+
+// =============================================================================
+// Phase 2 - Upload-Post provider foundation
+//
+// Five different things, deliberately kept apart:
+//   1. UploadPostProfile           provider container ("username"), may hold one account per platform
+//   2. UploadPostConnectedAccount  one platform account inside a profile (stable provider id + public handle)
+//   3. ManagedPage                 Socialith thematic page (minimal here; Page Network is Phase 4)
+//   4. Creator                     Socialith creator/artist (minimal here)
+//   5. Publishing Destination      a SocialAccount with publishingProvider = UPLOAD_POST, linked 1:1 to (2)
+// Synchronization is READ-ONLY with respect to the provider and never deletes a row:
+// things that disappear upstream are flagged (status/removedAt), mappings survive.
+// =============================================================================
+
+enum PublishingProviderKind {
+  NATIVE
+  UPLOAD_POST
+}
+
+enum ManagedPageStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CreatorStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum UploadPostProfileStatus {
+  ACTIVE
+  // No longer returned by the provider; kept so mappings and history survive.
+  REMOVED
+}
+
+enum UploadPostAccountStatus {
+  CONNECTED
+  REAUTH_REQUIRED
+  // No longer present in its profile at the provider.
+  DISCONNECTED
+}
+
+enum UploadPostSyncStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum UploadPostPublicationMode {
+  IMMEDIATE
+  PROVIDER_SCHEDULED
+}
+
+enum UploadPostPublicationStatus {
+  // Row created, request not yet sent (or being sent).
+  PENDING
+  // Provider accepted an async upload (request_id) and is processing it.
+  PROCESSING
+  // Handed to the provider's own scheduler (job_id); Socialith's job for the target is suppressed.
+  SCHEDULED_AT_PROVIDER
+  COMPLETED
+  FAILED
+  CANCELLED
+  // The request may or may not have reached the provider (timeout). Reconciled by external_id before any resend.
+  UNKNOWN_OUTCOME
+}
+
+enum MusicAvailability {
+  UNVERIFIED
+  VERIFIED_AVAILABLE
+  UNAVAILABLE
+}
+
+model ManagedPage {
+  id             String            @id @default(cuid())
+  organizationId String            @map("organization_id")
+  name           String
+  slug           String
+  description    String?           @db.Text
+  status         ManagedPageStatus @default(ACTIVE)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadPostProfiles UploadPostProfile[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, status])
+  @@map("managed_pages")
+}
+
+model Creator {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  name           String
+  notes          String?       @db.Text
+  status         CreatorStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization       Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  uploadPostAccounts UploadPostConnectedAccount[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("creators")
+}
+
+model UploadPostProfile {
+  id                String                  @id @default(cuid())
+  organizationId    String                  @map("organization_id")
+  // The provider's profile identifier: immutable, and the `user` value of every publish call.
+  username          String
+  displayName       String?                 @map("display_name")
+  providerCreatedAt DateTime?               @map("provider_created_at")
+  status            UploadPostProfileStatus @default(ACTIVE)
+  // `blocked` as reported by the provider (undocumented meaning when true): such a profile is never used for publishing.
+  blocked           Boolean                 @default(false)
+  // Platforms the provider reports as started-but-unfinished (e.g. "tiktok_pending").
+  pendingPlatforms  Json?                   @map("pending_platforms")
+  firstSeenAt       DateTime                @default(now()) @map("first_seen_at")
+  lastSyncedAt      DateTime?               @map("last_synced_at")
+  removedAt         DateTime?               @map("removed_at")
+  // Socialith-side mapping: which thematic page this provider profile serves.
+  managedPageId     String?                 @map("managed_page_id")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  organization Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  managedPage  ManagedPage?                 @relation(fields: [managedPageId], references: [id], onDelete: SetNull)
+  accounts     UploadPostConnectedAccount[]
+
+  // No duplicate rows across repeated synchronizations.
+  @@unique([organizationId, username])
+  @@index([organizationId, status])
+  @@index([managedPageId])
+  @@map("upload_post_profiles")
+}
+
+model UploadPostConnectedAccount {
+  id                String                  @id @default(cuid())
+  organizationId    String                  @map("organization_id")
+  profileId         String                  @map("profile_id")
+  // Provider platform key, lower-case ("tiktok", "instagram", "youtube", "facebook", "x", ...).
+  // A string, not the Platform enum: the provider supports many more platforms than
+  // Socialith can publish to today; they are still synchronized and shown.
+  platform          String
+  // The provider's STABLE account id (for TikTok the app-scoped open_id). The key of the mapping.
+  providerAccountId String                  @map("provider_account_id")
+  // The PUBLIC handle: changes on rename/reconnect, display only, never a key.
+  handle            String?
+  displayName       String?                 @map("display_name")
+  avatarUrl         String?                 @map("avatar_url") @db.Text
+  status            UploadPostAccountStatus @default(CONNECTED)
+  reauthRequired    Boolean                 @default(false) @map("reauth_required")
+  // Provider-reported capabilities (open list; e.g. TikTok: music, location, draft, ...).
+  capabilities      Json?
+  firstSeenAt       DateTime                @default(now()) @map("first_seen_at")
+  lastSeenAt        DateTime?               @map("last_seen_at")
+  disconnectedAt    DateTime?               @map("disconnected_at")
+  // Socialith-side mapping: which creator this account belongs to.
+  creatorId         String?                 @map("creator_id")
+  // The Publishing Destination (a SocialAccount with publishingProvider = UPLOAD_POST), when enabled.
+  socialAccountId   String?                 @unique @map("social_account_id")
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  organization  Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  profile       UploadPostProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  creator       Creator?          @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  socialAccount SocialAccount?    @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+
+  // The provider allows one account per platform inside a profile.
+  @@unique([profileId, platform])
+  @@index([organizationId, platform, status])
+  // The same real social account can be connected in more than one profile, so this is NOT unique.
+  @@index([organizationId, platform, providerAccountId])
+  @@index([creatorId])
+  @@map("upload_post_accounts")
+}
+
+model UploadPostSyncRun {
+  id                   String               @id @default(cuid())
+  organizationId       String               @map("organization_id")
+  // SCHEDULED | MANUAL | STARTUP
+  trigger              String
+  status               UploadPostSyncStatus @default(RUNNING)
+  startedAt            DateTime             @default(now()) @map("started_at")
+  finishedAt           DateTime?            @map("finished_at")
+  profilesSeen         Int                  @default(0) @map("profiles_seen")
+  profilesCreated      Int                  @default(0) @map("profiles_created")
+  profilesUpdated      Int                  @default(0) @map("profiles_updated")
+  profilesRemoved      Int                  @default(0) @map("profiles_removed")
+  accountsSeen         Int                  @default(0) @map("accounts_seen")
+  accountsCreated      Int                  @default(0) @map("accounts_created")
+  accountsUpdated      Int                  @default(0) @map("accounts_updated")
+  accountsDisconnected Int                  @default(0) @map("accounts_disconnected")
+  accountsReauth       Int                  @default(0) @map("accounts_reauth")
+  // Plan information as REPORTED by the provider at this sync (never a Socialith constant).
+  plan                 String?
+  profileLimit         Int?                 @map("profile_limit")
+  errorKind            String?              @map("error_kind")
+  errorMessage         String?              @map("error_message") @db.Text
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, startedAt])
+  @@map("upload_post_sync_runs")
+}
+
+// One row per ContentTarget published through Upload-Post: the correlation record between a
+// Socialith publication target and the provider's job. external_id (below) - never the title -
+// is how the two are matched.
+model UploadPostPublication {
+  id                 String                      @id @default(cuid())
+  organizationId     String                      @map("organization_id")
+  contentTargetId    String                      @unique @map("content_target_id")
+  mode               UploadPostPublicationMode   @default(IMMEDIATE)
+  status             UploadPostPublicationStatus @default(PENDING)
+  // Incremented when a failed target is deliberately retried: each generation gets its own
+  // external_id/request_id/idempotency key so a retry is a NEW provider job, while a mere
+  // network retry of the same generation can never create a second one.
+  generation         Int                         @default(1)
+  // Sent as external_id: "socialith:target:<contentTargetId>:g<generation>". Globally unique.
+  externalId         String                      @unique @map("external_id")
+  requestId          String                      @unique @map("request_id")
+  idempotencyKey     String                      @map("idempotency_key")
+  profileUsername    String                      @map("profile_username")
+  platform           String
+  providerJobId      String?                     @map("provider_job_id")
+  scheduledFor       DateTime?                   @map("scheduled_for")
+  handedOffAt        DateTime?                   @map("handed_off_at")
+  // The TikTok music id actually sent (audit); null when none was attached.
+  tiktokMusicId      String?                     @map("tiktok_music_id")
+  lastProviderStatus String?                     @map("last_provider_status")
+  lastProviderResult Json?                       @map("last_provider_result")
+  lastSyncedAt       DateTime?                   @map("last_synced_at")
+  lastErrorKind      String?                     @map("last_error_kind")
+  lastErrorMessage   String?                     @map("last_error_message") @db.Text
+  // Delivery caveats worth showing next to the target (e.g. why a mapped TikTok track was not attached).
+  notes            String?                     @db.Text
+  submittedAt        DateTime?                   @map("submitted_at")
+  completedAt        DateTime?                   @map("completed_at")
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contentTarget ContentTarget @relation(fields: [contentTargetId], references: [id], onDelete: Cascade)
+
+  // The reconciler/poller scans in-flight rows by status and staleness.
+  @@index([status, lastSyncedAt])
+  @@index([organizationId, status])
+  @@index([providerJobId])
+  @@map("upload_post_publications")
+}
+
+// At-least-once webhook deliveries are de-duplicated on the provider's delivery id.
+model UploadPostWebhookDelivery {
+  id          String    @id @default(cuid())
+  deliveryId  String    @unique @map("delivery_id")
+  event       String
+  attempt     Int?
+  requestId   String?   @map("request_id")
+  jobId       String?   @map("job_id")
+  externalId  String?   @map("external_id")
+  // PROCESSED | IGNORED | FAILED
+  outcome     String
+  detail      String?   @db.Text
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  processedAt DateTime? @map("processed_at")
+
+  @@index([receivedAt])
+  @@map("upload_post_webhook_deliveries")
+}
+
+// Reusable link between a Socialith Sound (track) and the identifier a provider accepts for it.
+// A track is NEVER assumed usable because it has an ISRC/Spotify URL: availability is verified
+// against the provider's chart data, and rights must be confirmed by a person.
+model SoundMusicMapping {
+  id                  String            @id @default(cuid())
+  organizationId      String            @map("organization_id")
+  soundId             String            @map("sound_id")
+  // Which provider catalogue the id belongs to.
+  provider            String            @default("UPLOAD_POST_TIKTOK")
+  // Passed as tiktok_music_id.
+  providerMusicId     String            @map("provider_music_id")
+  // Reference only: the provider rejects it on public posts.
+  commercialMusicId   String?           @map("commercial_music_id")
+  providerTitle       String            @map("provider_title")
+  providerArtist      String?           @map("provider_artist")
+  durationSec         Int?              @map("duration_sec")
+  previewUrl          String?           @map("preview_url") @db.Text
+  coverUrl            String?           @map("cover_url") @db.Text
+  availability        MusicAvailability @default(UNVERIFIED)
+  verifiedAt          DateTime?         @map("verified_at")
+  verifiedWithProfile String?           @map("verified_with_profile")
+  // A person's attestation that the track may be used for this promotional purpose.
+  rightsConfirmed     Boolean           @default(false) @map("rights_confirmed")
+  rightsConfirmedAt   DateTime?         @map("rights_confirmed_at")
+  rightsConfirmedById String?           @map("rights_confirmed_by_id")
+  rightsNote          String?           @map("rights_note") @db.Text
+  createdById         String?           @map("created_by_id")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sound        Sound        @relation(fields: [soundId], references: [id], onDelete: Cascade)
+
+  @@unique([soundId, provider, providerMusicId])
+  @@index([organizationId, soundId])
+  @@index([organizationId, availability])
+  @@map("sound_music_mappings")
 }

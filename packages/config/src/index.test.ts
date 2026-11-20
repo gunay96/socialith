@@ -102,3 +102,50 @@ describe("resolveOAuthRedirectUri", () => {
     expect(resolveOAuthRedirectUri("TIKTOK", env)).toBe("https://other.example.com/cb");
   });
 });
+
+describe("parseEnv — Upload-Post (Phase 2)", () => {
+  it("is optional: unset/empty means 'not configured', with safe defaults and the hybrid hand-off OFF", () => {
+    const env = parseEnv({ ...BASE, UPLOAD_POST_API_KEY: "" });
+    expect(env.UPLOAD_POST_API_KEY).toBeUndefined();
+    expect(env.UPLOAD_POST_BASE_URL).toBeUndefined();
+    expect(env.UPLOAD_POST_TIMEOUT_MS).toBe(15_000);
+    expect(env.UPLOAD_POST_PUBLISH_TIMEOUT_MS).toBe(60_000);
+    expect(env.UPLOAD_POST_SYNC_INTERVAL_MINUTES).toBe(30);
+    expect(env.UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED).toBe(false);
+    expect(env.UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS).toBe(48);
+  });
+
+  it("parses the key, the hand-off switch and numeric settings", () => {
+    const env = parseEnv({
+      ...BASE,
+      UPLOAD_POST_API_KEY: "a-real-looking-key-123",
+      UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED: "true",
+      UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS: "24",
+      UPLOAD_POST_SYNC_INTERVAL_MINUTES: "60",
+    });
+    expect(env.UPLOAD_POST_API_KEY).toBe("a-real-looking-key-123");
+    expect(env.UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED).toBe(true);
+    expect(env.UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS).toBe(24);
+    expect(env.UPLOAD_POST_SYNC_INTERVAL_MINUTES).toBe(60);
+  });
+
+  it("rejects an implausibly short key, a short webhook secret and a bad hand-off value — naming the variable, never the value", () => {
+    const issues = issuesOf({ ...BASE, UPLOAD_POST_API_KEY: "k3y-abc", UPLOAD_POST_WEBHOOK_SECRET: "t1ny-s3cr3t", UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED: "yes" });
+    const paths = issues.map((i) => i.path);
+    expect(paths).toEqual(expect.arrayContaining(["UPLOAD_POST_API_KEY", "UPLOAD_POST_WEBHOOK_SECRET", "UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED"]));
+    expect(JSON.stringify(issues)).not.toContain("k3y-abc");
+    expect(JSON.stringify(issues)).not.toContain("t1ny-s3cr3t");
+  });
+
+  it("requires https for the base URL in production, and outside production allows http only on loopback", () => {
+    expect(issuesOf({ ...PROD, UPLOAD_POST_BASE_URL: "http://127.0.0.1:9999/api" }).map((i) => i.path)).toContain("UPLOAD_POST_BASE_URL");
+    expect(issuesOf({ ...PROD, UPLOAD_POST_BASE_URL: "https://api.upload-post.com/api" })).toEqual([]);
+    expect(issuesOf({ ...BASE, UPLOAD_POST_BASE_URL: "http://127.0.0.1:9999/api" })).toEqual([]);
+    expect(issuesOf({ ...BASE, UPLOAD_POST_BASE_URL: "http://api.example.net/api" }).map((i) => i.path)).toContain("UPLOAD_POST_BASE_URL");
+  });
+
+  it("bounds the hand-off window and timeouts", () => {
+    expect(issuesOf({ ...BASE, UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS: "0" }).map((i) => i.path)).toContain("UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS");
+    expect(issuesOf({ ...BASE, UPLOAD_POST_TIMEOUT_MS: "10" }).map((i) => i.path)).toContain("UPLOAD_POST_TIMEOUT_MS");
+  });
+});

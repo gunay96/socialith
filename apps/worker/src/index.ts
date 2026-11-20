@@ -20,6 +20,7 @@ import { closeScheduledProducers } from "./scheduled/producers.js";
 import { createBullMqSchedulingPort } from "./scheduling/queue-port.js";
 import { buildReconcileConfig, reconcileScheduling } from "./scheduling/reconcile.js";
 import { ensureRepeatable } from "./scheduling/ensure-repeatable.js";
+import { processUploadPost } from "./processors/upload-post.processor.js";
 
 const env = loadEnv();
 
@@ -240,6 +241,15 @@ schedulingReconcileWorker.on("failed", (job, err) => {
   logger.error({ jobId: job?.id, err }, "scheduling-reconcile job failed");
 });
 
+// Phase 2: Upload-Post work (profile sync, hand-off/drift/status sweep, webhook-triggered reconcile).
+// Concurrency 1 keeps the sync and the sweep from racing each other. Without UPLOAD_POST_API_KEY every
+// job returns immediately ("not configured") - the queue is always safe to run.
+const uploadPostQueue = new Queue(QUEUE_NAMES.UPLOAD_POST, { connection });
+const uploadPostWorker = new Worker(QUEUE_NAMES.UPLOAD_POST, processUploadPost, { connection, concurrency: 1 });
+uploadPostWorker.on("failed", (job, err) => {
+  logger.error({ jobId: job?.id, kind: job?.data?.kind, err }, "upload-post job failed");
+});
+
 const SCAN_EVERY_MS = 15 * 60 * 1000;
 const reconcileEveryMs = env.SCHEDULING_RECONCILE_INTERVAL_SECONDS * 1000;
 
@@ -272,6 +282,17 @@ async function ensureScheduledJobs(atBoot: boolean): Promise<void> {
     jobId: "scheduling-reconcile",
     everyMs: reconcileEveryMs,
   });
+
+  const upSync = await ensureRepeatable(uploadPostQueue, {
+    name: "upload-post-sync",
+    jobId: "upload-post-sync",
+    everyMs: env.UPLOAD_POST_SYNC_INTERVAL_MINUTES * 60_000,
+    data: { kind: "sync", trigger: "SCHEDULED" },
+  });
+  await ensureRepeatable(uploadPostQueue, { name: "upload-post-sweep", jobId: "upload-post-sweep", everyMs: 60_000, data: { kind: "sweep" } });
+  if (env.UPLOAD_POST_API_KEY && (atBoot || upSync === "registered")) {
+    await uploadPostQueue.add("upload-post-sync", { kind: "sync", trigger: "STARTUP" }, { removeOnComplete: true, removeOnFail: true, jobId: `upload-post-sync-startup-${Date.now()}` });
+  }
 
   if (!atBoot && reconcile === "registered") {
     logger.warn("repeatable schedules were missing while running (Redis state lost?) — re-registered, reconciling now");
@@ -306,6 +327,7 @@ const readiness = {
   tokenRefresh: false,
   tokenRefreshScan: false,
   schedulingReconcile: false,
+  uploadPost: false,
 };
 function isReady(): boolean {
   return (
@@ -319,7 +341,8 @@ function isReady(): boolean {
     readiness.analyticsSyncScan &&
     readiness.tokenRefresh &&
     readiness.tokenRefreshScan &&
-    readiness.schedulingReconcile
+    readiness.schedulingReconcile &&
+    readiness.uploadPost
   );
 }
 
@@ -378,6 +401,11 @@ schedulingReconcileWorker.on("ready", () => {
   logger.info("scheduling-reconcile worker ready and connected to Redis");
 });
 
+uploadPostWorker.on("ready", () => {
+  readiness.uploadPost = true;
+  logger.info("upload-post worker ready and connected to Redis");
+});
+
 const healthServer = http.createServer((req, res) => {
   if (req.url === "/health") {
     const ready = isReady();
@@ -418,6 +446,8 @@ async function shutdown(signal: string) {
     tokenRefreshQueue.close(),
     tokenRefreshScanWorker.close(),
     tokenRefreshScanQueue.close(),
+    uploadPostWorker.close(),
+    uploadPostQueue.close(),
     schedulingReconcileWorker.close(),
     schedulingReconcileQueue.close(),
     schedulingPort.close(),

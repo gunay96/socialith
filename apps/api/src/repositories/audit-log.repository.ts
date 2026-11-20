@@ -26,7 +26,20 @@ export type AuditAction =
   | "SOCIAL_ACCOUNT_DISCONNECTED"
   | "SOCIAL_ACCOUNT_CONNECTED"
   // Written by the one-time production owner bootstrap CLI (TD-32).
-  | "OWNER_BOOTSTRAPPED";
+  | "OWNER_BOOTSTRAPPED"
+  // Phase 2: Upload-Post provider integration (mappings, destinations, music).
+  | "UPLOAD_POST_SYNC_REQUESTED"
+  | "UPLOAD_POST_MAPPING_CHANGED"
+  | "UPLOAD_POST_DESTINATION_ENABLED"
+  | "UPLOAD_POST_DESTINATION_DISABLED"
+  | "MANAGED_PAGE_CREATED"
+  | "MANAGED_PAGE_UPDATED"
+  | "CREATOR_CREATED"
+  | "CREATOR_UPDATED"
+  | "MUSIC_MAPPING_CREATED"
+  | "MUSIC_MAPPING_VERIFIED"
+  | "MUSIC_MAPPING_RIGHTS_CHANGED"
+  | "MUSIC_MAPPING_DELETED";
 
 interface CreateAuditLogInput {
   organizationId: string;

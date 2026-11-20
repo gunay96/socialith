@@ -1,6 +1,5 @@
 import { prisma } from "@socialith/database";
-import { loadEnv, resolveAssetStorageConfig, type Env } from "@socialith/config";
-import { resolveAssetStorage } from "@socialith/video-engine";
+import { loadEnv } from "@socialith/config";
 import type { Job } from "bullmq";
 import type { Prisma } from "@socialith/database";
 import type { PublishingJobData } from "@socialith/types";
@@ -8,36 +7,16 @@ import { logger } from "../logger.js";
 import { resolvePublishingProvider } from "../publishing/resolve-provider.js";
 import { resolveAccessToken } from "../publishing/token.js";
 import { enqueuePublishStatusPoll } from "../publishing/enqueue.js";
+import { resolveAssetUrl } from "../publishing/assets.js";
+import { finalizeContentStatus } from "../publishing/finalize.js";
+import { getUploadPostClient, toPublishError } from "../upload-post/client.js";
+import { publishViaUploadPost } from "../upload-post/publish.js";
 import { DEMO_ACCOUNT_PUBLISH_MESSAGE, isDemoAccount } from "../publishing/demo-guard.js";
 import { PublishError, type PublishErrorCode, type PublishInput, type PublishSuccess } from "../publishing/types.js";
 
-/**
- * ContentAsset.url is a snapshot taken at upload/render time — fine for
- * the real local storage backend (never expires), but for R2 without a
- * public bucket it's a presigned URL good for only ~1 hour (see
- * packages/video-engine's R2AssetStorage.getDownloadUrl). A target
- * scheduled days out would otherwise hand the platform an already-expired
- * URL. Regenerates a fresh signed URL from the asset's real storage key
- * right before every publish attempt instead of trusting the stale
- * persisted one; a Phase 05 url-only asset (no storageKey — referencing
- * media that lives somewhere else entirely) and any local-storage asset
- * both pass through unchanged.
- */
-async function resolveAssetUrl(env: Env, asset: { url: string; metadata: Prisma.JsonValue }): Promise<string> {
-  const storageKey =
-    asset.metadata && typeof asset.metadata === "object" && !Array.isArray(asset.metadata)
-      ? (asset.metadata as Record<string, unknown>).storageKey
-      : undefined;
-  if (typeof storageKey !== "string") return asset.url;
-
-  const storage = resolveAssetStorage(resolveAssetStorageConfig(env));
-  if (storage.kind !== "r2") return asset.url;
-  return storage.getDownloadUrl(storageKey);
-}
-
 const TARGET_INCLUDE = {
   content: { include: { variations: true, assets: true, sound: true } },
-  socialAccount: { include: { platformConnection: true } },
+  socialAccount: { include: { platformConnection: true, uploadPostAccount: { include: { profile: true } } } },
 } satisfies Prisma.ContentTargetInclude;
 
 type TargetWithRelations = Prisma.ContentTargetGetPayload<{ include: typeof TARGET_INCLUDE }>;
@@ -76,16 +55,7 @@ function classify(err: unknown): Classified {
 
 /** After a target reaches a terminal state, rolls Content.status up from its targets — PUBLISHED only if every target succeeded, FAILED if any did not. Exported for index.ts's "failed" handler, which reaches a terminal target state via a different path (BullMQ retry exhaustion) than this file's own permanent-failure branch. */
 export async function maybeFinalizeContentStatus(contentId: string): Promise<void> {
-  const remaining = await prisma.contentTarget.count({
-    where: { contentId, status: { in: ["PENDING", "SCHEDULED", "PUBLISHING"] } },
-  });
-  if (remaining > 0) return;
-
-  const failedCount = await prisma.contentTarget.count({ where: { contentId, status: "FAILED" } });
-  await prisma.content.update({
-    where: { id: contentId },
-    data: { status: failedCount > 0 ? "FAILED" : "PUBLISHED" },
-  });
+  await finalizeContentStatus(prisma, contentId);
 }
 
 async function recordSuccess(
@@ -249,6 +219,31 @@ export async function processPublishing(job: Job<PublishingJobData>): Promise<vo
     return;
   }
 
+  // Phase 2: destinations published through Upload-Post have no native OAuth token. They follow the
+  // same recording path (PublishAttempt rows, retry classification) but call the provider adapter.
+  if (target.socialAccount.publishingProvider === "UPLOAD_POST") {
+    const variation = target.content.variations.find((v) => v.platform === target.socialAccount.platform) ?? null;
+    const relevant = [
+      ...target.content.assets.filter((a) => a.platform === target.socialAccount.platform),
+      ...target.content.assets.filter((a) => a.platform === null),
+    ];
+    try {
+      const assets = await Promise.all(relevant.map(async (a) => ({ type: a.type, url: await resolveAssetUrl(env, a) })));
+      const result = await publishViaUploadPost({
+        db: prisma,
+        client: getUploadPostClient(env),
+        target,
+        caption: variation?.caption ?? target.content.caption,
+        title: variation?.title ?? null,
+        assets,
+      });
+      await recordSuccess(target, attemptNumber, startedAt, result);
+    } catch (err) {
+      const permanent = await recordFailure(target, attemptNumber, startedAt, toPublishError(err));
+      if (!permanent) throw err;
+    }
+    return;
+  }
   let accessToken: string;
   try {
     accessToken = await resolveAccessToken(env, target.socialAccount, target.socialAccount.platformConnection);

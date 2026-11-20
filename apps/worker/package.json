@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:live-readonly": "vitest run --config vitest.live.config.ts",
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
     "@socialith/config": "workspace:*",
     "@socialith/database": "workspace:*",
     "@socialith/types": "workspace:*",
+    "@socialith/upload-post": "workspace:*",
     "@socialith/video-engine": "workspace:*",
     "bullmq": "^5.12.0",
     "ioredis": "^5.4.0",

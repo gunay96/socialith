@@ -30,6 +30,12 @@ export default defineConfig({
       DATABASE_URL: url,
       SESSION_SECRET: "integration-test-session-secret-0123456789",
       TOKEN_ENCRYPTION_KEY: "ab".repeat(32),
+      // Upload-Post tests talk to the in-repo contract double (fixed loopback port), never to the live service.
+      UPLOAD_POST_API_KEY: "test-key-0000000000",
+      UPLOAD_POST_BASE_URL: "http://127.0.0.1:39870/api",
+      UPLOAD_POST_WEBHOOK_SECRET: "whsec_integration_secret_value_1",
+      UPLOAD_POST_WEBHOOK_SECRET_PREVIOUS: "whsec_integration_previous_value_2",
+      ...(process.env.REDIS_INTEGRATION_URL ? { REDIS_URL: process.env.REDIS_INTEGRATION_URL } : {}),
     },
   },
 });

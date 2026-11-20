@@ -32,6 +32,8 @@ declare global {
     interface Request {
       /** Populated by requireAuth. Absent on unauthenticated requests. */
       user?: SafeUser;
+      /** Raw request body, kept ONLY for the signed Upload-Post webhook route (see app.ts). */
+      rawBody?: Buffer;
     }
   }
 }

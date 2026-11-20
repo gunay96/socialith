@@ -2,6 +2,7 @@ import type { PrismaClient } from "@socialith/database";
 import type { Env } from "@socialith/config";
 import { logger as defaultLogger } from "../logger.js";
 import { holdStaleContent } from "./hold.js";
+import { SOCIALITH_OWNED, PROVIDER_OWNED } from "./ownership.js";
 import { classifySchedule, stuckFailureMessage } from "./policy.js";
 import type { SchedulingQueuePort } from "./queue-port.js";
 
@@ -26,6 +27,8 @@ export interface ReconcileSummary {
   schedulingJobsEnqueued: number;
   heldStale: number;
   skippedNoScheduleTime: number;
+  /** SCHEDULED content whose remaining targets are all owned by the Upload-Post scheduler (not ours to fire or hold). */
+  skippedProviderOwned: number;
   stuckPublishingRequeued: number;
   stuckPollsRestored: number;
   stuckFailed: number;
@@ -75,11 +78,15 @@ export async function reconcileScheduling(deps: ReconcileDeps): Promise<Reconcil
     schedulingJobsEnqueued: 0,
     heldStale: 0,
     skippedNoScheduleTime: 0,
+    skippedProviderOwned: 0,
     stuckPublishingRequeued: 0,
     stuckPollsRestored: 0,
     stuckFailed: 0,
     contentFinalized: 0,
   };
+
+  // Cheap feature check: provider-ownership queries only run when a hand-off row exists at all.
+  const handoffInUse = (await db.contentTarget.count({ where: PROVIDER_OWNED, take: 1 })) > 0;
 
   // 1. SCHEDULED content ----------------------------------------------------
   let lastId = "";
@@ -100,6 +107,14 @@ export async function reconcileScheduling(deps: ReconcileDeps): Promise<Reconcil
         summary.skippedNoScheduleTime++;
         log.warn({ contentId: content.id }, "scheduling-reconcile: SCHEDULED content has no scheduledAt, skipping");
         continue;
+      }
+
+      if (handoffInUse) {
+        const ours = await db.contentTarget.count({ where: { contentId: content.id, status: "SCHEDULED", ...SOCIALITH_OWNED } });
+        if (ours === 0) {
+          summary.skippedProviderOwned++;
+          continue;
+        }
       }
 
       const verdict = classifySchedule(content.scheduledAt, now, config.staleAfterMs);
