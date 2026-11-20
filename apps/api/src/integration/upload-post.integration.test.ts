@@ -31,16 +31,86 @@ let redis: Redis;
 
 type Session = { cookie: string; orgId: string; userId: string };
 
-async function http(method: string, path: string, opts: { cookie?: string; body?: unknown; raw?: string; headers?: Record<string, string> } = {}) {
+/**
+ * The API's response envelope. `data` is the success payload; error responses carry `error` instead, so tests assert
+ * `status` (or `error`) before reading `data`. `T` is the shape the calling test inspects; without a type argument the
+ * payload is `unknown` and can only be compared as a whole (toEqual / toMatchObject / toHaveLength).
+ */
+interface ApiBody<T> {
+  success?: boolean;
+  data: T;
+  error?: { code: string; message: string };
+}
+
+/** Only the fields these tests read. They mirror the service projections in apps/api/src/services/upload-post*.ts. */
+interface Paged<T> {
+  items: T[];
+  total: number;
+}
+interface AccountRow {
+  id: string;
+  platform: string;
+  sharedAcrossProfiles: boolean;
+  publishable: boolean;
+  creator: { id: string; name: string } | null;
+  socialAccount: { id: string } | null;
+}
+interface ProfileRow {
+  username: string;
+  accounts: AccountRow[];
+  managedPage: { id: string; name: string; slug: string } | null;
+}
+interface HealthData {
+  provider: { latencyMs?: number; account?: { email: string | null } };
+}
+interface OverviewData {
+  status: string;
+  profiles: { active: number; limit: number | null };
+  accounts: { byStatus: Record<string, number>; byPlatform: Record<string, number>; destinations: number };
+  lastSuccessfulSyncAt: string | null;
+}
+interface IdRow {
+  id: string;
+  slug?: string;
+}
+interface MusicSearchData {
+  tracks: { id: string }[];
+  scope: string;
+  notice: string;
+}
+interface MappingVerifyData {
+  mapping: { availability: string; rightsConfirmed: boolean };
+  notice: string;
+}
+interface MappingRightsData {
+  rightsConfirmed: boolean;
+  rightsConfirmedById: string | null;
+}
+interface CapabilityPlatform {
+  platform: string;
+  state: string;
+  reason: string | null;
+  destinations: number;
+  connectableProfiles: { id: string; username: string }[];
+  features: { key: string; state: string }[];
+}
+interface CapabilitiesData {
+  synced: boolean;
+  lastSyncedAt: string | null;
+  plan: { name: string | null; profileLimit: number | null; profilesUsed: number; profilesRemaining: number | null };
+  platforms: CapabilityPlatform[];
+}
+
+async function http<T = unknown>(method: string, path: string, opts: { cookie?: string; body?: unknown; raw?: string; headers?: Record<string, string> } = {}) {
   const res = await fetch(`${base}${path}`, {
     method,
     headers: { ...(opts.raw === undefined && opts.body !== undefined ? { "Content-Type": "application/json" } : {}), ...(opts.raw !== undefined ? { "Content-Type": "application/json" } : {}), ...(opts.cookie ? { Cookie: opts.cookie } : {}), ...opts.headers },
     body: opts.raw !== undefined ? opts.raw : opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
   const text = await res.text();
-  let json: { success?: boolean; data?: any; error?: { code: string; message: string } } = {};
+  let json = {} as ApiBody<T>;
   try {
-    json = JSON.parse(text);
+    json = JSON.parse(text) as ApiBody<T>;
   } catch {
     /* non-JSON */
   }
@@ -153,12 +223,12 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
     it("health probes the provider (GET /uploadposts/me), reports latency and plan, and shows the account e-mail to admins only", async () => {
       const admin = await makeOrg("ADMIN");
       const viewer = await addUser(admin.orgId, "VIEWER");
-      const h = await http("GET", "/api/upload-post/health?refresh=true", { cookie: admin.cookie });
+      const h = await http<HealthData>("GET", "/api/upload-post/health?refresh=true", { cookie: admin.cookie });
       expect(h.json.data.provider).toMatchObject({ configured: true, ok: true, account: { plan: "Business", email: "owner@acme.test" } });
       expect(h.json.data.provider.latencyMs).toBeGreaterThanOrEqual(0);
       expect(mock.state.requests.some((r) => r.path === "/uploadposts/me" && r.authorized)).toBe(true);
-      const v = await http("GET", "/api/upload-post/health", { cookie: viewer });
-      expect(v.json.data.provider.account.email).toBeNull();
+      const v = await http<HealthData>("GET", "/api/upload-post/health", { cookie: viewer });
+      expect(v.json.data.provider.account?.email).toBeNull();
     });
 
     it("a rejected key is reported as data (ok:false, kind AUTH) — not an error response, and without the key", async () => {
@@ -168,7 +238,7 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       expect(h.status).toBe(200);
       expect(h.json.data.provider).toMatchObject({ configured: true, ok: false, errorKind: "AUTH" });
       expect(h.text).not.toContain(KEY);
-      const o = await http("GET", "/api/upload-post/overview", { cookie: admin.cookie });
+      const o = await http<OverviewData>("GET", "/api/upload-post/overview", { cookie: admin.cookie });
       expect(o.json.data.status).toBe("DISCONNECTED");
     });
 
@@ -188,7 +258,7 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
     it("overview moves SYNC_PENDING → CONNECTED → SYNC_FAILED → LIMIT_REACHED as sync history changes, and counts rows", async () => {
       const a = await makeOrg("ADMIN");
       await seedProvider(a.orgId);
-      const status = async () => (await http("GET", "/api/upload-post/overview?x=" + Math.random(), { cookie: a.cookie })).json.data;
+      const status = async () => (await http<OverviewData>("GET", "/api/upload-post/overview?x=" + Math.random(), { cookie: a.cookie })).json.data;
       expect((await status()).status).toBe("SYNC_PENDING");
 
       await prisma.uploadPostSyncRun.create({ data: { organizationId: a.orgId, trigger: "MANUAL", status: "SUCCEEDED", finishedAt: new Date(), profilesSeen: 1, plan: "business", profileLimit: 225 } });
@@ -246,16 +316,17 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const a = await makeOrg("ADMIN");
       const seeded = await seedProvider(a.orgId);
       await prisma.uploadPostProfile.create({ data: { organizationId: a.orgId, username: "label_two", displayName: null } });
-      const all = (await http("GET", "/api/upload-post/profiles", { cookie: a.cookie })).json.data;
+      const profiles = (path: string) => http<Paged<ProfileRow>>("GET", `/api/upload-post/profiles${path}`, { cookie: a.cookie });
+      const all = (await profiles("")).json.data;
       expect(all.total).toBe(2);
-      const acme = all.items.find((p: any) => p.username === "acme_music");
-      expect(acme.accounts.map((x: any) => x.platform)).toEqual(["facebook", "instagram", "tiktok", "youtube"]);
-      expect((await http("GET", "/api/upload-post/profiles?search=label", { cookie: a.cookie })).json.data.total).toBe(1);
-      expect((await http("GET", "/api/upload-post/profiles?search=tiktok.acme", { cookie: a.cookie })).json.data.items[0].username).toBe("acme_music");
+      const acme = all.items.find((p) => p.username === "acme_music");
+      expect(acme?.accounts.map((x) => x.platform)).toEqual(["facebook", "instagram", "tiktok", "youtube"]);
+      expect((await profiles("?search=label")).json.data.total).toBe(1);
+      expect((await profiles("?search=tiktok.acme")).json.data.items[0]?.username).toBe("acme_music");
       const page = await prisma.managedPage.create({ data: { organizationId: a.orgId, name: "P", slug: "p" } });
       await prisma.uploadPostProfile.update({ where: { id: seeded.profile.id }, data: { managedPageId: page.id } });
-      expect((await http("GET", "/api/upload-post/profiles?mapped=true", { cookie: a.cookie })).json.data.items.map((p: any) => p.username)).toEqual(["acme_music"]);
-      expect((await http("GET", "/api/upload-post/profiles?mapped=false", { cookie: a.cookie })).json.data.items.map((p: any) => p.username)).toEqual(["label_two"]);
+      expect((await profiles("?mapped=true")).json.data.items.map((p) => p.username)).toEqual(["acme_music"]);
+      expect((await profiles("?mapped=false")).json.data.items.map((p) => p.username)).toEqual(["label_two"]);
       expect((await http("GET", "/api/upload-post/profiles?pageSize=0", { cookie: a.cookie })).status).toBe(400);
     });
 
@@ -265,14 +336,14 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const other = await prisma.uploadPostProfile.create({ data: { organizationId: a.orgId, username: "second", displayName: "Second" } });
       await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: other.id, platform: "tiktok", providerAccountId: s.tiktok.providerAccountId, handle: "same.account" } });
 
-      const get = async (q: string) => (await http("GET", `/api/upload-post/accounts${q}`, { cookie: a.cookie })).json.data;
+      const get = async (q: string) => (await http<Paged<AccountRow>>("GET", `/api/upload-post/accounts${q}`, { cookie: a.cookie })).json.data;
       expect((await get("")).total).toBe(5);
       expect((await get("?platform=tiktok")).total).toBe(2);
-      expect((await get("?status=REAUTH_REQUIRED")).items.map((x: any) => x.platform)).toEqual(["youtube"]);
+      expect((await get("?status=REAUTH_REQUIRED")).items.map((x) => x.platform)).toEqual(["youtube"]);
       const tt = (await get("?platform=tiktok")).items;
-      expect(tt.every((x: any) => x.sharedAcrossProfiles)).toBe(true); // same real account in two profiles is surfaced
+      expect(tt.every((x) => x.sharedAcrossProfiles)).toBe(true); // same real account in two profiles is surfaced
       expect((await get("?platform=instagram")).items[0]).toMatchObject({ sharedAcrossProfiles: false, publishable: true });
-      expect((await get("?platform=facebook")).items[0].publishable).toBe(false);
+      expect((await get("?platform=facebook")).items[0]?.publishable).toBe(false);
       expect((await get("?search=same.account")).total).toBe(1);
       expect((await get("?destination=true")).total).toBe(0);
       expect((await get("?mapped=false")).total).toBe(5);
@@ -282,8 +353,8 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const a = await makeOrg("ADMIN");
       const s = await seedProvider(a.orgId);
       const b = await makeOrg("ADMIN");
-      expect((await http("GET", "/api/upload-post/profiles", { cookie: b.cookie })).json.data.total).toBe(0);
-      expect((await http("GET", "/api/upload-post/accounts", { cookie: b.cookie })).json.data.total).toBe(0);
+      expect((await http<Paged<ProfileRow>>("GET", "/api/upload-post/profiles", { cookie: b.cookie })).json.data.total).toBe(0);
+      expect((await http<Paged<AccountRow>>("GET", "/api/upload-post/accounts", { cookie: b.cookie })).json.data.total).toBe(0);
       expect((await http("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: b.cookie, body: { creatorId: null } })).status).toBe(404);
       expect((await http("POST", `/api/upload-post/accounts/${s.tiktok.id}/destination`, { cookie: b.cookie })).status).toBe(404);
       expect((await http("PATCH", `/api/upload-post/profiles/${s.profile.id}/mapping`, { cookie: b.cookie, body: { managedPageId: null } })).status).toBe(404);
@@ -294,36 +365,36 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
     it("creates pages/creators (unique slug/name), maps a profile to a page and an account to a creator, and audits changes", async () => {
       const a = await makeOrg("ADMIN");
       const s = await seedProvider(a.orgId);
-      const page = (await http("POST", "/api/managed-pages", { cookie: a.cookie, body: { name: "Çocuk Müzik Sayfası" } })).json.data;
+      const page = (await http<IdRow>("POST", "/api/managed-pages", { cookie: a.cookie, body: { name: "Çocuk Müzik Sayfası" } })).json.data;
       expect(page.slug).toBe("cocuk-muzik-sayfasi");
       expect((await http("POST", "/api/managed-pages", { cookie: a.cookie, body: { name: "Other", slug: "cocuk-muzik-sayfasi" } })).status).toBe(409);
-      const creator = (await http("POST", "/api/creators", { cookie: a.cookie, body: { name: "Acme Artist" } })).json.data;
+      const creator = (await http<IdRow>("POST", "/api/creators", { cookie: a.cookie, body: { name: "Acme Artist" } })).json.data;
       expect((await http("POST", "/api/creators", { cookie: a.cookie, body: { name: "acme artist" } })).status).toBe(409); // case-insensitive duplicate
 
-      const pm = await http("PATCH", `/api/upload-post/profiles/${s.profile.id}/mapping`, { cookie: a.cookie, body: { managedPageId: page.id } });
+      const pm = await http<ProfileRow>("PATCH", `/api/upload-post/profiles/${s.profile.id}/mapping`, { cookie: a.cookie, body: { managedPageId: page.id } });
       expect(pm.status).toBe(200);
       expect(pm.json.data.managedPage).toMatchObject({ id: page.id });
-      const am = await http("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: { creatorId: creator.id } });
+      const am = await http<AccountRow>("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: { creatorId: creator.id } });
       expect(am.json.data.creator).toMatchObject({ id: creator.id, name: "Acme Artist" });
       // clearing works
-      expect((await http("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: { creatorId: null } })).json.data.creator).toBeNull();
+      expect((await http<AccountRow>("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: { creatorId: null } })).json.data.creator).toBeNull();
       expect(await prisma.auditLog.count({ where: { organizationId: a.orgId, action: "UPLOAD_POST_MAPPING_CHANGED" } })).toBe(3);
     });
 
     it("refuses archived targets, unknown targets, foreign targets and creator assignment on unsupported platforms", async () => {
       const a = await makeOrg("ADMIN");
       const s = await seedProvider(a.orgId);
-      const page = (await http("POST", "/api/managed-pages", { cookie: a.cookie, body: { name: "Page P" } })).json.data;
-      const creator = (await http("POST", "/api/creators", { cookie: a.cookie, body: { name: "C" } })).json.data;
+      const page = (await http<IdRow>("POST", "/api/managed-pages", { cookie: a.cookie, body: { name: "Page P" } })).json.data;
+      const creator = (await http<IdRow>("POST", "/api/creators", { cookie: a.cookie, body: { name: "C" } })).json.data;
       await http("PATCH", `/api/managed-pages/${page.id}`, { cookie: a.cookie, body: { status: "ARCHIVED" } });
       await http("PATCH", `/api/creators/${creator.id}`, { cookie: a.cookie, body: { status: "ARCHIVED" } });
       expect((await http("PATCH", `/api/upload-post/profiles/${s.profile.id}/mapping`, { cookie: a.cookie, body: { managedPageId: page.id } })).status).toBe(409);
       expect((await http("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: { creatorId: creator.id } })).status).toBe(409);
       expect((await http("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: { creatorId: "nope" } })).status).toBe(404);
-      const live = (await http("POST", "/api/creators", { cookie: a.cookie, body: { name: "Live" } })).json.data;
+      const live = (await http<IdRow>("POST", "/api/creators", { cookie: a.cookie, body: { name: "Live" } })).json.data;
       expect((await http("PATCH", `/api/upload-post/accounts/${s.facebook.id}/mapping`, { cookie: a.cookie, body: { creatorId: live.id } })).status).toBe(409);
       const b = await makeOrg("ADMIN");
-      const foreign = (await http("POST", "/api/creators", { cookie: b.cookie, body: { name: "Foreign" } })).json.data;
+      const foreign = (await http<IdRow>("POST", "/api/creators", { cookie: b.cookie, body: { name: "Foreign" } })).json.data;
       expect((await http("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: { creatorId: foreign.id } })).status).toBe(404);
       expect((await http("PATCH", `/api/upload-post/accounts/${s.tiktok.id}/mapping`, { cookie: a.cookie, body: {} })).status).toBe(400);
     });
@@ -333,11 +404,11 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
     it("enable creates ONE Upload-Post SocialAccount keyed by the stable provider id and links it; repeating is idempotent; disable keeps history", async () => {
       const a = await makeOrg("ADMIN");
       const s = await seedProvider(a.orgId);
-      const on = await http("POST", `/api/upload-post/accounts/${s.tiktok.id}/destination`, { cookie: a.cookie });
+      const on = await http<AccountRow>("POST", `/api/upload-post/accounts/${s.tiktok.id}/destination`, { cookie: a.cookie });
       expect(on.status).toBe(200);
       const social = await prisma.socialAccount.findFirstOrThrow({ where: { organizationId: a.orgId } });
       expect(social).toMatchObject({ platform: "TIKTOK", externalAccountId: "-000g91dgwXgwtNwcStableOpenId1", publishingProvider: "UPLOAD_POST", status: "CONNECTED" });
-      expect(on.json.data.socialAccount.id).toBe(social.id);
+      expect(on.json.data.socialAccount?.id).toBe(social.id);
       expect(await prisma.platformConnection.count({ where: { socialAccountId: social.id } })).toBe(0); // no native tokens involved
 
       await http("POST", `/api/upload-post/accounts/${s.tiktok.id}/destination`, { cookie: a.cookie });
@@ -345,7 +416,7 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
 
       const content = await prisma.content.create({ data: { organizationId: a.orgId, caption: "c", status: "PUBLISHED" } });
       const target = await prisma.contentTarget.create({ data: { contentId: content.id, socialAccountId: social.id, status: "PUBLISHED" } });
-      const off = await http("DELETE", `/api/upload-post/accounts/${s.tiktok.id}/destination`, { cookie: a.cookie });
+      const off = await http<AccountRow>("DELETE", `/api/upload-post/accounts/${s.tiktok.id}/destination`, { cookie: a.cookie });
       expect(off.status).toBe(200);
       expect(off.json.data.socialAccount).toBeNull();
       expect(await prisma.socialAccount.findUniqueOrThrow({ where: { id: social.id } })).toMatchObject({ status: "DISCONNECTED" });
@@ -407,12 +478,12 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       };
       await mk("COMPLETED", "IMMEDIATE");
       await mk("SCHEDULED_AT_PROVIDER", "PROVIDER_SCHEDULED");
-      const pubs = await http("GET", "/api/upload-post/publications", { cookie: a.cookie });
+      const pubs = await http<Paged<unknown>>("GET", "/api/upload-post/publications", { cookie: a.cookie });
       expect(pubs.json.data.total).toBe(2);
       expect(pubs.text).not.toContain("secret-idem");
       expect(pubs.text).not.toContain('"raw"');
-      expect((await http("GET", "/api/upload-post/publications?status=COMPLETED", { cookie: a.cookie })).json.data.total).toBe(1);
-      const sched = await http("GET", "/api/upload-post/scheduled", { cookie: a.cookie });
+      expect((await http<Paged<unknown>>("GET", "/api/upload-post/publications?status=COMPLETED", { cookie: a.cookie })).json.data.total).toBe(1);
+      const sched = await http<Paged<unknown>>("GET", "/api/upload-post/scheduled", { cookie: a.cookie });
       expect(sched.json.data.total).toBe(1);
       expect(sched.json.data.items[0]).toMatchObject({ status: "SCHEDULED_AT_PROVIDER", providerJobId: "job_1", platform: "tiktok" });
     });
@@ -426,12 +497,12 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
     it("searches chart data for a music-capable TikTok profile and labels it as Commercial Music Library charts, not the full catalogue", async () => {
       const a = await makeOrg("ADMIN");
       const s = await seedProvider(a.orgId);
-      const r = await http("GET", `/api/upload-post/tiktok/music?profileId=${s.profile.id}&q=neon`, { cookie: a.cookie });
+      const r = await http<MusicSearchData>("GET", `/api/upload-post/tiktok/music?profileId=${s.profile.id}&q=neon`, { cookie: a.cookie });
       expect(r.status).toBe(200);
-      expect(r.json.data.tracks.map((t: any) => t.id)).toEqual(["7012345678901234567"]);
+      expect(r.json.data.tracks.map((t) => t.id)).toEqual(["7012345678901234567"]);
       expect(r.json.data.scope).toBe("COMMERCIAL_MUSIC_LIBRARY_CHARTS");
       expect(r.json.data.notice).toMatch(/NOT the whole TikTok catalogue/);
-      expect((await http("GET", `/api/upload-post/tiktok/music?profileId=${s.profile.id}`, { cookie: a.cookie })).json.data.tracks).toHaveLength(2); // trending
+      expect((await http<MusicSearchData>("GET", `/api/upload-post/tiktok/music?profileId=${s.profile.id}`, { cookie: a.cookie })).json.data.tracks).toHaveLength(2); // trending
     });
 
     it("offers music only for accounts that report the capability (409 reconnect), never a silent empty list", async () => {
@@ -448,7 +519,7 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const a = await makeOrg("ADMIN");
       const s = await seedProvider(a.orgId);
       const sound = await withSound(a);
-      const created = await http("POST", `/api/sounds/${sound.id}/music-mappings`, {
+      const created = await http<IdRow>("POST", `/api/sounds/${sound.id}/music-mappings`, {
         cookie: a.cookie,
         body: { providerMusicId: "7012345678901234567", providerTitle: "Neon Skyline", providerArtist: "Wave Theory", commercialMusicId: "6987654321098765432" },
       });
@@ -456,18 +527,18 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       expect(created.json.data).toMatchObject({ availability: "UNVERIFIED", rightsConfirmed: false });
       expect((await http("POST", `/api/sounds/${sound.id}/music-mappings`, { cookie: a.cookie, body: { providerMusicId: "7012345678901234567", providerTitle: "x" } })).status).toBe(409);
 
-      const verified = await http("POST", `/api/music-mappings/${created.json.data.id}/verify`, { cookie: a.cookie, body: { profileId: s.profile.id } });
+      const verified = await http<MappingVerifyData>("POST", `/api/music-mappings/${created.json.data.id}/verify`, { cookie: a.cookie, body: { profileId: s.profile.id } });
       expect(verified.json.data.mapping).toMatchObject({ availability: "VERIFIED_AVAILABLE", verifiedWithProfile: "acme_music" });
       expect(verified.json.data.mapping.rightsConfirmed).toBe(false); // availability alone never grants rights
 
-      const rights = await http("POST", `/api/music-mappings/${created.json.data.id}/rights`, { cookie: a.cookie, body: { confirmed: true, note: "Cleared with the label, promo use" } });
+      const rights = await http<MappingRightsData>("POST", `/api/music-mappings/${created.json.data.id}/rights`, { cookie: a.cookie, body: { confirmed: true, note: "Cleared with the label, promo use" } });
       expect(rights.json.data).toMatchObject({ rightsConfirmed: true, rightsNote: "Cleared with the label, promo use" });
       expect(rights.json.data.rightsConfirmedById).toBeTruthy();
-      expect((await http("POST", `/api/music-mappings/${created.json.data.id}/rights`, { cookie: a.cookie, body: { confirmed: false } })).json.data.rightsConfirmed).toBe(false);
+      expect((await http<MappingRightsData>("POST", `/api/music-mappings/${created.json.data.id}/rights`, { cookie: a.cookie, body: { confirmed: false } })).json.data.rightsConfirmed).toBe(false);
 
       // a track that is not in the chart data is marked UNAVAILABLE (an ISRC/Spotify URL does not make it usable)
-      const ghost = await http("POST", `/api/sounds/${sound.id}/music-mappings`, { cookie: a.cookie, body: { providerMusicId: "999", providerTitle: "Not In Charts" } });
-      const ghostVerified = await http("POST", `/api/music-mappings/${ghost.json.data.id}/verify`, { cookie: a.cookie, body: { profileId: s.profile.id } });
+      const ghost = await http<IdRow>("POST", `/api/sounds/${sound.id}/music-mappings`, { cookie: a.cookie, body: { providerMusicId: "999", providerTitle: "Not In Charts" } });
+      const ghostVerified = await http<MappingVerifyData>("POST", `/api/music-mappings/${ghost.json.data.id}/verify`, { cookie: a.cookie, body: { profileId: s.profile.id } });
       expect(ghostVerified.json.data.mapping.availability).toBe("UNAVAILABLE");
       expect(ghostVerified.json.data.notice).toMatch(/NOT the whole TikTok catalogue/);
 
@@ -563,19 +634,26 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
   });
 
   describe("trial plan: empty and unconnected profiles, platform availability", () => {
-    const api = (cookie: string, path: string) => http("GET", `/api/upload-post${path}`, { cookie });
+    const api = <T = unknown>(cookie: string, path: string) => http<T>("GET", `/api/upload-post${path}`, { cookie });
+    const capabilities = async (cookie: string) => (await api<CapabilitiesData>(cookie, "/capabilities")).json.data;
+    /** One platform of a capabilities answer; a missing platform fails the test with a clear message instead of a TypeError. */
+    const platformOf = (cap: CapabilitiesData, key: string): CapabilityPlatform => {
+      const found = cap.platforms.find((p) => p.platform === key);
+      if (!found) throw new Error(`capabilities has no platform "${key}"`);
+      return found;
+    };
     const trialRun = (orgId: string, over: Record<string, unknown> = {}) =>
       prisma.uploadPostSyncRun.create({ data: { organizationId: orgId, trigger: "MANUAL", status: "SUCCEEDED", finishedAt: new Date(), profilesSeen: 1, plan: "default", profileLimit: 2, ...over } });
-    const platformsOf = (data: { platforms: { platform: string; state: string }[] }) => Object.fromEntries(data.platforms.map((p) => [p.platform, p.state]));
+    const platformsOf = (data: CapabilitiesData) => Object.fromEntries(data.platforms.map((p) => [p.platform, p.state]));
 
     it("nothing synchronized yet: no profiles, every platform UNAVAILABLE with a reason, no plan figures invented", async () => {
       const a = await makeOrg("ADMIN");
-      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      const cap = await capabilities(a.cookie);
       expect(cap).toMatchObject({ synced: false, lastSyncedAt: null, plan: { name: null, profileLimit: null, profilesUsed: 0, profilesRemaining: null } });
       expect(platformsOf(cap)).toEqual({ tiktok: "UNAVAILABLE", instagram: "UNAVAILABLE", youtube: "UNAVAILABLE" });
-      expect(cap.platforms[0].reason).toMatch(/not been synchronized/);
-      expect((await api(a.cookie, "/profiles")).json.data).toMatchObject({ items: [], total: 0 });
-      expect((await api(a.cookie, "/accounts")).json.data).toMatchObject({ items: [], total: 0 });
+      expect(cap.platforms[0]?.reason).toMatch(/not been synchronized/);
+      expect((await api<Paged<ProfileRow>>(a.cookie, "/profiles")).json.data).toMatchObject({ items: [], total: 0 });
+      expect((await api<Paged<AccountRow>>(a.cookie, "/accounts")).json.data).toMatchObject({ items: [], total: 0 });
     });
 
     it("the live trial state (plan default, limit 2, one profile, no accounts) is shown as it is: capacity from the provider, every platform unavailable", async () => {
@@ -587,24 +665,24 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       mock.state.plan = "Default";
       try {
         resetUploadPostClientForTests();
-        const cap = (await api(viewer, "/capabilities")).json.data;
+        const cap = await capabilities(viewer);
         expect(cap).toMatchObject({ synced: true, plan: { name: "default", profileLimit: 2, profilesUsed: 1, profilesRemaining: 1 } });
         expect(platformsOf(cap)).toEqual({ tiktok: "UNAVAILABLE", instagram: "UNAVAILABLE", youtube: "UNAVAILABLE" });
-        const tiktok = cap.platforms.find((p: { platform: string }) => p.platform === "tiktok");
+        const tiktok = platformOf(cap, "tiktok");
         expect(tiktok.reason).toMatch(/has not confirmed access/);
         expect(tiktok.features[0]).toMatchObject({ key: "music", state: "UNAVAILABLE" });
         expect(tiktok.connectableProfiles).toEqual([{ id: profile.id, username: "example_profile" }]);
 
         const plan = (await api(viewer, "/plan")).json.data;
         expect(plan).toMatchObject({ plan: "Default", profileLimit: 2, profilesUsed: 1, profilesRemaining: 1, limitReached: false, source: "live" });
-        const overview = (await api(viewer, "/overview")).json.data;
+        const overview = (await api<OverviewData>(viewer, "/overview")).json.data;
         expect(overview.status).toBe("CONNECTED"); // 1 of 2 profiles used is not "limit reached"
         expect(overview).toMatchObject({ profiles: { active: 1, limit: 2 }, accounts: { byStatus: {}, byPlatform: {}, destinations: 0 } });
 
-        const profiles = (await api(viewer, "/profiles")).json.data;
+        const profiles = (await api<Paged<ProfileRow>>(viewer, "/profiles")).json.data;
         expect(profiles.total).toBe(1);
         expect(profiles.items[0]).toMatchObject({ username: "example_profile", blocked: false, accounts: [] });
-        expect((await api(viewer, "/accounts")).json.data.total).toBe(0);
+        expect((await api<Paged<AccountRow>>(viewer, "/accounts")).json.data.total).toBe(0);
       } finally {
         mock.state.plan = previousPlan;
       }
@@ -614,9 +692,9 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const a = await makeOrg("ADMIN");
       await prisma.uploadPostProfile.createMany({ data: [{ organizationId: a.orgId, username: "one" }, { organizationId: a.orgId, username: "two" }] });
       await trialRun(a.orgId, { profilesSeen: 2 });
-      const overview = (await api(a.cookie, "/overview")).json.data;
+      const overview = (await api<OverviewData>(a.cookie, "/overview")).json.data;
       expect(overview.status).toBe("LIMIT_REACHED");
-      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      const cap = await capabilities(a.cookie);
       expect(cap.plan).toMatchObject({ profileLimit: 2, profilesUsed: 2, profilesRemaining: 0 });
     });
 
@@ -627,15 +705,15 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const ig = await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: profile.id, platform: "instagram", providerAccountId: "17841400000000009", handle: "my.band", lastSeenAt: new Date() } });
       await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: profile.id, platform: "youtube", providerAccountId: "UCmyBandChannel000009", handle: "mybandtv", lastSeenAt: new Date() } });
 
-      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      const cap = await capabilities(a.cookie);
       expect(platformsOf(cap)).toEqual({ tiktok: "UNAVAILABLE", instagram: "AVAILABLE", youtube: "AVAILABLE" });
-      expect(cap.platforms.find((p: { platform: string }) => p.platform === "tiktok").connectableProfiles).toHaveLength(1);
-      expect(cap.platforms.find((p: { platform: string }) => p.platform === "instagram").connectableProfiles).toEqual([]);
+      expect(platformOf(cap, "tiktok").connectableProfiles).toHaveLength(1);
+      expect(platformOf(cap, "instagram").connectableProfiles).toEqual([]);
 
       const enabled = await http("POST", `/api/upload-post/accounts/${ig.id}/destination`, { cookie: a.cookie });
       expect(enabled.status).toBe(200);
-      const after = (await api(a.cookie, "/capabilities")).json.data;
-      expect(after.platforms.find((p: { platform: string }) => p.platform === "instagram").destinations).toBe(1);
+      const after = await capabilities(a.cookie);
+      expect(platformOf(after, "instagram").destinations).toBe(1);
       // no TikTok account row exists, so there is nothing that could be enabled or published to
       expect(await prisma.uploadPostConnectedAccount.count({ where: { organizationId: a.orgId, platform: "tiktok" } })).toBe(0);
       expect(await prisma.socialAccount.count({ where: { organizationId: a.orgId, platform: "TIKTOK" } })).toBe(0);
@@ -646,9 +724,9 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const profile = await prisma.uploadPostProfile.create({ data: { organizationId: a.orgId, username: "blocked_profile", blocked: true, lastSyncedAt: new Date() } });
       await trialRun(a.orgId);
       const yt = await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: profile.id, platform: "youtube", providerAccountId: "UCblocked00000000001", lastSeenAt: new Date() } });
-      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      const cap = await capabilities(a.cookie);
       expect(platformsOf(cap).youtube).toBe("UNAVAILABLE");
-      expect(cap.platforms.find((p: { platform: string }) => p.platform === "youtube").reason).toMatch(/blocked/);
+      expect(platformOf(cap, "youtube").reason).toMatch(/blocked/);
       const r = await http("POST", `/api/upload-post/accounts/${yt.id}/destination`, { cookie: a.cookie });
       expect(r.status).toBe(409);
       expect(r.json.error?.message).toMatch(/blocked/);
@@ -662,9 +740,9 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: pa.id, platform: "instagram", providerAccountId: "1784140000000000a" } });
       await trialRun(a.orgId);
       await trialRun(b.orgId, { profilesSeen: 0 });
-      const forB = await api(b.cookie, "/capabilities");
+      const forB = await api<CapabilitiesData>(b.cookie, "/capabilities");
       expect(platformsOf(forB.json.data).instagram).toBe("UNAVAILABLE");
-      expect(forB.json.data.platforms[0].connectableProfiles).toEqual([]);
+      expect(forB.json.data.platforms[0]?.connectableProfiles).toEqual([]);
       expect(forB.text).not.toContain(KEY);
       expect(forB.text).not.toContain("only_a");
     });
