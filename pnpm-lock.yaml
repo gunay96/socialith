@@ -38,6 +38,9 @@ importers:
       '@socialith/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@socialith/publishing':
+        specifier: workspace:*
+        version: link:../../packages/publishing
       '@socialith/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -126,6 +129,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@socialith/publishing':
+        specifier: workspace:*
+        version: link:../../packages/publishing
       '@socialith/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -175,6 +181,9 @@ importers:
       '@socialith/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@socialith/publishing':
+        specifier: workspace:*
+        version: link:../../packages/publishing
       '@socialith/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -262,6 +271,18 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+
+  packages/publishing:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.14.0
+        version: 20.19.43
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)
 
   packages/types:
     devDependencies:
