@@ -38,6 +38,11 @@ Internet ─ 80/443 ─ Caddy (automatic HTTPS, Let's Encrypt)
 | 5 | **Rotate the TikTok client secret** — it was pasted into chat earlier and must be treated as compromised (TD-07). Procedure: `SECURITY_CREDENTIAL_ROTATION.md`. |
 | 6 | Run the one-time owner bootstrap (§4a) with a password you generate in your password manager. |
 
+### 2a. Production restrictions (known defects that must stay switched off)
+
+| Restriction | Why | Until |
+|---|---|---|
+| **Do not enable native OAuth token refresh on MySQL.** Leave `TIKTOK_CLIENT_KEY/SECRET`, `META_APP_ID/SECRET` and `GOOGLE_CLIENT_ID/SECRET` empty, do not create `platform_connections` rows by hand, and publish through Upload-Post only. | The refresh takes a PostgreSQL-only lock (`pg_advisory_xact_lock`), so it fails on MySQL (TD-59). Upload-Post is not affected. | TD-59 is fixed and verified (`TD59_REMEDIATION_TASK.md`) and the owner lifts this restriction |
 ## 3. Provision the server (outline)
 
 ```bash

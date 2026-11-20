@@ -129,6 +129,7 @@ Window length: `SCHEDULE_STALE_AFTER_MINUTES` (default 30). Demo/seed accounts c
 | Scheduled posts did not go out | worker was down longer than the stale window → held (§5) | read the audit row; retry the targets deliberately |
 | Login works but every user is logged out after a Redis incident | sessions live in Redis | expected; users log in again |
 | Certificate error after a domain change | DNS not pointing at the VPS yet | fix DNS (owner action), `$COMPOSE restart caddy` |
+| A natively connected account's publish / status poll / analytics sync fails at the token step (log mentions `pg_advisory_xact_lock` or an unknown function) | TD-59: native OAuth token refresh is PostgreSQL-only and must not be used on MySQL; a native connection should not exist on this stack | do not retry in a loop; disconnect the native account and publish through Upload-Post; see `TD59_REMEDIATION_TASK.md` §2 |
 
 ## 7. Secrets and rotation
 

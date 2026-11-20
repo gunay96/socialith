@@ -10,7 +10,7 @@ Tiers: **automated tests** (pure rules + real MySQL/Redis through the real expre
 | `@socialith/web` (incl. editor draft helpers, 5 new) | 13 | nothing |
 | API unit | 237 (+1 POSIX-only skip) | nothing |
 | Worker unit / config / auth / upload-post / video-engine | 75 / 22 / 37 / 45 / 7 | nothing |
-| **API integration** | **189** (131 before + **47** in `page-network.integration.test.ts` + **11** in `analytics.integration.test.ts`, TD-54) | MySQL 8.4 + Redis |
+| **API integration** | **190** (131 before + **47** in `page-network.integration.test.ts` + **12** in `analytics.integration.test.ts`, TD-54) | MySQL 8.4 + Redis |
 | Worker integration | 112 (unchanged) | MySQL 8.4 + Redis |
 
 Phase 1-3 suites run **unchanged**; no assertion was edited or removed.
@@ -60,12 +60,13 @@ docker compose -f docker-compose.mysql-test.yml down -v
 
 ## 6. Campaign analytics on MySQL (TD-54) - `analytics.integration.test.ts`
 
-The campaign Performance endpoint (and the content / sound / account endpoints and the dashboard, which share its "latest snapshot per target" rollup) answered HTTP 500 on MySQL because of PostgreSQL-only SQL. The fix is in place in the existing repositories (no second analytics layer). All 11 tests run the real express app on real MySQL 8.4; **against the original code 10 of them fail** with MySQL error 1064 (the 11th, content-list pagination, is unrelated to the SQL and is a guard that it still behaves).
+The campaign Performance endpoint (and the content / sound / account endpoints and the dashboard, which share its "latest snapshot per target" rollup) answered HTTP 500 on MySQL because of PostgreSQL-only SQL. The fix is in place in the existing repositories (no second analytics layer). All 12 tests run the real express app on real MySQL 8.4; **against the original code 10 of the first 11 fail** (the 12th was added afterwards from a second, independent fix of the same bug) with MySQL error 1064 (the 11th, content-list pagination, is unrelated to the SQL and is a guard that it still behaves).
 
 | Requested | Proof |
 |---|---|
 | Campaign performance, multiple posts | three posts; one grows 10 → 50 → 120 (inserted out of time order): only the latest snapshot of each target is summed; a never-synced target counts in `targetCount` but not `syncedCount` |
 | Multiple publishing destinations | one content on Instagram + TikTok + YouTube: campaign and content totals sum all three, each account endpoint sees only its own, unpublished targets are counted but not as published |
+| Top content / top sounds across targets *(ported from the independent fix)* | one content with two targets is summed (400 + 250 = 650) using each target's newest snapshot even though an older one is larger (99,999); a never-synced post is absent; another organization's 5,000,000 views never appear in the rankings or the totals |
 | Multiple publication attempts | four attempts on one target (three failed, one succeeded) do not multiply views, likes or the post's place in the dashboard ranking |
 | Nullable relationships | NULL counters count as synced and add 0; a NULL *newest* snapshot does not fall back to an older one; a caption-less post is labelled "(no caption)"; content with no campaign / no sound stays out of a campaign's totals |
 | Empty campaigns | no content, content without targets, targets without snapshots, and a brand-new organization's dashboard all answer 200 with zeros / empty lists |
