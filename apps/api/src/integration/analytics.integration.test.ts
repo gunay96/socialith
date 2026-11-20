@@ -269,6 +269,45 @@ suite("Campaign analytics on MySQL 8.4 (TD-54)", () => {
     expect(second).toEqual(first);
   });
 
+  it("top content and top sounds add up a content's targets, use each target's newest snapshot even when an older one is bigger, and never include another organization", async () => {
+    const o = await makeOrg();
+    const other = await makeOrg();
+    const a1 = await account(o.orgId, "TIKTOK", "top-a");
+    const a2 = await account(o.orgId, "TIKTOK", "top-b");
+    const sTop = await prisma.sound.create({ data: { organizationId: o.orgId, title: "Sound top post", platform: "TIKTOK" } });
+    const sLow = await prisma.sound.create({ data: { organizationId: o.orgId, title: "Sound low post", platform: "TIKTOK" } });
+    const top = await content(o.orgId, { caption: "top post", soundId: sTop.id });
+    const low = await content(o.orgId, { caption: "low post", soundId: sLow.id });
+    const neverSynced = await content(o.orgId, { caption: "no metrics yet" });
+    const tTop1 = await target(top.id, a1.id);
+    const tTop2 = await target(top.id, a2.id);
+    const tLow = await target(low.id, a1.id);
+    await target(neverSynced.id, a2.id);
+    // two targets of one content: each has a stale-but-huge and a newest-but-small snapshot; only the newest counts
+    await snapshot(o.orgId, tTop1.id, "TIKTOK", 1, { views: 99_999 });
+    await snapshot(o.orgId, tTop1.id, "TIKTOK", 9, { views: 400 });
+    await snapshot(o.orgId, tTop2.id, "TIKTOK", 1, { views: 99_999 });
+    await snapshot(o.orgId, tTop2.id, "TIKTOK", 9, { views: 250 });
+    await snapshot(o.orgId, tLow.id, "TIKTOK", 9, { views: 50 });
+    // another organization with an enormous number must never show up here
+    const foreignAcc = await account(other.orgId, "TIKTOK", "foreign");
+    const foreignSound = await prisma.sound.create({ data: { organizationId: other.orgId, title: "Foreign sound", platform: "TIKTOK" } });
+    const foreign = await content(other.orgId, { caption: "foreign post", soundId: foreignSound.id });
+    const tForeign = await target(foreign.id, foreignAcc.id);
+    await snapshot(other.orgId, tForeign.id, "TIKTOK", 9, { views: 5_000_000 });
+
+    const dash = (await get<Dashboard>(o, "/api/dashboard")).json.data;
+    expect(dash.topContent).toEqual([
+      { id: top.id, label: "top post", viewCount: 650 },
+      { id: low.id, label: "low post", viewCount: 50 },
+    ]);
+    expect(dash.topSounds).toEqual([
+      { id: sTop.id, label: "Sound top post", viewCount: 650 },
+      { id: sLow.id, label: "Sound low post", viewCount: 50 },
+    ]);
+    expect(dash.metrics.viewCount).toBe(700); // never the stale 99,999 rows, never the other organization
+  });
+
   it("two snapshots fetched at the same instant: the newest by id is used, deterministically", async () => {
     const o = await makeOrg();
     const c = await campaign(o.orgId);
