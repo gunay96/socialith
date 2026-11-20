@@ -1,5 +1,9 @@
-import { mkdir, writeFile, stat, unlink } from "node:fs/promises";
+import { createReadStream as fsCreateReadStream, createWriteStream } from "node:fs";
+import { mkdir, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import type { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import {
   S3Client,
   PutObjectCommand,
@@ -8,6 +12,7 @@ import {
   GetObjectCommand,
   type S3ClientConfig,
 } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export interface StoredFile {
@@ -22,16 +27,59 @@ export interface AssetMetadata {
   lastModified: Date | null;
 }
 
+/** A byte range (inclusive), as in an HTTP Range header. */
+export interface ByteRange {
+  start: number;
+  end?: number;
+}
+
+export interface ObjectReadStream {
+  stream: Readable;
+  /** Total size of the object (not of the range). */
+  sizeBytes: number;
+  contentType: string | null;
+  /** The range actually served, when one was requested. */
+  range?: { start: number; end: number };
+}
+
+export interface PutFileOptions {
+  contentType?: string;
+  /**
+   * Default false: writing to a key that already exists fails with StorageKeyExistsError. Originals are immutable, so
+   * the library never overwrites; only code that deliberately replaces a derivative passes true.
+   */
+  overwrite?: boolean;
+}
+
+/** Thrown instead of overwriting an existing object. */
+export class StorageKeyExistsError extends Error {
+  constructor(readonly key: string) {
+    super(`Storage key already exists and will not be overwritten: ${key}`);
+    this.name = "StorageKeyExistsError";
+  }
+}
+
 /**
  * The real storage contract every backend below implements — local disk
  * (dev, credential-free) and R2/S3-compatible object storage (production).
  * Callers (apps/api's upload service, apps/worker's render processor) go
  * through this interface only, never a backend's own class directly, so
  * swapping the backend never touches call sites — see resolveAssetStorage.
+ *
+ * Two families of write/read methods:
+ *  - `upload` / buffer methods: the original Phase 05-10 API, fine for small files, kept unchanged for existing callers.
+ *  - `putFile` / `createReadStream` / `downloadToFile`: STREAMING. They never hold a file in memory, so multi-hundred-MB
+ *    videos and archives are safe. Everything in the media library uses these.
  */
 export interface AssetStorage {
   readonly kind: "local" | "r2";
   upload(key: string, data: Buffer, contentType?: string): Promise<StoredFile>;
+  /** Streams a local file into storage. */
+  putFile(key: string, filePath: string, options?: PutFileOptions): Promise<StoredFile>;
+  /** Streams an object out, optionally a byte range of it. */
+  createReadStream(key: string, range?: ByteRange): Promise<ObjectReadStream>;
+  /** Streams an object to a local file. */
+  downloadToFile(key: string, destinationPath: string): Promise<void>;
   /**
    * A URL the browser/platform can actually fetch the file from.
    * Local: the real (unauthenticated, see apps/api/src/app.ts's /media
@@ -54,7 +102,7 @@ function assertSafeKey(key: string): void {
   // apps/worker's render processor), never taken from client input
   // directly, but this guards against a path-traversal key regardless of
   // where it originates.
-  if (key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
+  if (key.length === 0 || key.includes("..") || key.startsWith("/") || key.startsWith("\\") || key.includes("\0") || /^[A-Za-z]:/.test(key)) {
     throw new Error(`Unsafe storage key: ${key}`);
   }
 }
@@ -82,16 +130,51 @@ export class LocalAssetStorage implements AssetStorage {
     return join(this.config.baseDir, key);
   }
 
+  private urlFor(key: string): string {
+    return `${this.config.baseUrl}/${key.split("\\").join("/")}`;
+  }
+
   async upload(key: string, data: Buffer): Promise<StoredFile> {
     const absolutePath = this.resolvePath(key);
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, data);
-    return { key, url: `${this.config.baseUrl}/${key.split("\\").join("/")}` };
+    return { key, url: this.urlFor(key) };
+  }
+
+  async putFile(key: string, filePath: string, options: PutFileOptions = {}): Promise<StoredFile> {
+    const absolutePath = this.resolvePath(key);
+    if (!options.overwrite && (await this.exists(key))) throw new StorageKeyExistsError(key);
+    await mkdir(dirname(absolutePath), { recursive: true });
+    // write beside the target and rename, so a reader (or a crash) never sees a half-written file
+    const partial = `${absolutePath}.${randomUUID()}.partial`;
+    try {
+      await pipeline(fsCreateReadStream(filePath), createWriteStream(partial));
+      await rename(partial, absolutePath);
+    } catch (err) {
+      await rm(partial, { force: true });
+      throw err;
+    }
+    return { key, url: this.urlFor(key) };
+  }
+
+  async createReadStream(key: string, range?: ByteRange): Promise<ObjectReadStream> {
+    const absolutePath = this.resolvePath(key);
+    const { size } = await stat(absolutePath);
+    if (!range) return { stream: fsCreateReadStream(absolutePath), sizeBytes: size, contentType: null };
+    const end = Math.min(range.end ?? size - 1, size - 1);
+    if (range.start < 0 || range.start > end) throw new RangeError(`Unsatisfiable range ${range.start}-${range.end ?? ""} for an object of ${size} bytes`);
+    return { stream: fsCreateReadStream(absolutePath, { start: range.start, end }), sizeBytes: size, contentType: null, range: { start: range.start, end } };
+  }
+
+  async downloadToFile(key: string, destinationPath: string): Promise<void> {
+    const { stream } = await this.createReadStream(key);
+    await mkdir(dirname(destinationPath), { recursive: true });
+    await pipeline(stream, createWriteStream(destinationPath));
   }
 
   async getDownloadUrl(key: string): Promise<string> {
     assertSafeKey(key);
-    return `${this.config.baseUrl}/${key.split("\\").join("/")}`;
+    return this.urlFor(key);
   }
 
   async delete(key: string): Promise<void> {
@@ -123,7 +206,17 @@ export interface R2StorageConfig {
   bucketName: string;
   /** A public bucket/custom domain URL, if configured — see AssetStorage.getDownloadUrl. */
   publicUrl?: string;
+  /**
+   * Overrides the endpoint. Empty = Cloudflare R2's own (https://<accountId>.r2.cloudflarestorage.com). Setting it
+   * points the same adapter at any S3-compatible service (path-style addressing is then used), which is how the
+   * adapter is exercised against a local S3 server in tests.
+   */
+  endpoint?: string;
 }
+
+/** Streaming multipart upload settings: 8 MiB parts, four in flight - bounded memory (<= 32 MiB) however large the file. */
+const MULTIPART_PART_BYTES = 8 * 1024 * 1024;
+const MULTIPART_QUEUE_SIZE = 4;
 
 /**
  * Cloudflare R2 — S3-compatible, so the AWS SDK's S3Client talks to it
@@ -139,13 +232,18 @@ export class R2AssetStorage implements AssetStorage {
   private readonly bucket: string;
   private readonly publicUrl: string | undefined;
 
-  constructor(config: R2StorageConfig) {
+  constructor(config: R2StorageConfig, client?: S3Client) {
     const clientConfig: S3ClientConfig = {
       region: "auto",
-      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
+      endpoint: config.endpoint ?? `https://${config.accountId}.r2.cloudflarestorage.com`,
       credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
+      // Plain S3 requests that every S3-compatible service accepts: no automatic trailing checksums on streamed bodies
+      // (newer SDK defaults add them, and S3-compatible stores differ in how they handle them). Not verified live on R2.
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
+      ...(config.endpoint ? { forcePathStyle: true } : {}),
     };
-    this.client = new S3Client(clientConfig);
+    this.client = client ?? new S3Client(clientConfig);
     this.bucket = config.bucketName;
     this.publicUrl = config.publicUrl;
   }
@@ -156,6 +254,43 @@ export class R2AssetStorage implements AssetStorage {
       new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: data, ContentType: contentType }),
     );
     return { key, url: await this.getDownloadUrl(key) };
+  }
+
+  async putFile(key: string, filePath: string, options: PutFileOptions = {}): Promise<StoredFile> {
+    assertSafeKey(key);
+    if (!options.overwrite && (await this.exists(key))) throw new StorageKeyExistsError(key);
+    const upload = new Upload({
+      client: this.client,
+      params: { Bucket: this.bucket, Key: key, Body: fsCreateReadStream(filePath), ContentType: options.contentType },
+      partSize: MULTIPART_PART_BYTES,
+      queueSize: MULTIPART_QUEUE_SIZE,
+      leavePartsOnError: false,
+    });
+    await upload.done();
+    return { key, url: await this.getDownloadUrl(key) };
+  }
+
+  async createReadStream(key: string, range?: ByteRange): Promise<ObjectReadStream> {
+    assertSafeKey(key);
+    const res = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: key, ...(range ? { Range: `bytes=${range.start}-${range.end ?? ""}` } : {}) }),
+    );
+    const body = res.Body as Readable | undefined;
+    if (!body) throw new Error(`Object has no body: ${key}`);
+    // ContentRange is "bytes start-end/total" for a ranged response
+    const match = res.ContentRange ? /bytes (\d+)-(\d+)\/(\d+)/.exec(res.ContentRange) : null;
+    return {
+      stream: body,
+      sizeBytes: match ? Number(match[3]) : (res.ContentLength ?? 0),
+      contentType: res.ContentType ?? null,
+      ...(match ? { range: { start: Number(match[1]), end: Number(match[2]) } } : {}),
+    };
+  }
+
+  async downloadToFile(key: string, destinationPath: string): Promise<void> {
+    const { stream } = await this.createReadStream(key);
+    await mkdir(dirname(destinationPath), { recursive: true });
+    await pipeline(stream, createWriteStream(destinationPath));
   }
 
   async getDownloadUrl(key: string, expiresInSeconds = 3600): Promise<string> {
