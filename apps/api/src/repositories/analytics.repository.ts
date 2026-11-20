@@ -31,11 +31,38 @@ const EMPTY_ROLLUP: MetricsRollup = {
   shareCount: 0,
 };
 
+/** How many target ids go into one query: far below MySQL's 65,535 placeholder limit, so any number of targets works. */
+const TARGET_CHUNK = 1000;
+
+type SnapshotRow = { view_count: number | null; like_count: number | null; comment_count: number | null; share_count: number | null };
+
+/**
+ * The newest snapshot of each given target (MySQL 8.4): ROW_NUMBER() over the (content_target_id, fetched_at)
+ * index, `rn = 1` per target. `id DESC` breaks a tie between two snapshots fetched in the same millisecond, so the
+ * choice is deterministic (the PostgreSQL `DISTINCT ON` this replaces left ties arbitrary). A target with no snapshot
+ * yields no row; a latest snapshot whose counters are NULL yields a row of NULLs (counted as "synced", summed as 0) -
+ * exactly as before.
+ */
+async function latestSnapshotsFor(ids: string[]): Promise<SnapshotRow[]> {
+  return prisma.$queryRaw<SnapshotRow[]>(Prisma.sql`
+    SELECT view_count, like_count, comment_count, share_count
+    FROM (
+      SELECT view_count, like_count, comment_count, share_count,
+             ROW_NUMBER() OVER (PARTITION BY content_target_id ORDER BY fetched_at DESC, id DESC) AS rn
+      FROM post_metrics_snapshots
+      WHERE content_target_id IN (${Prisma.join(ids)})
+    ) AS ranked
+    WHERE rn = 1
+  `);
+}
+
 /**
  * Sums each target's *latest* snapshot only (a growth series isn't summed
- * across time, just across targets) — a real `DISTINCT ON` query against
- * the (content_target_id, fetched_at) index, not an N+1 walk, so this
- * stays cheap at 1000+ targets. `targetIds` is always pre-scoped to the
+ * across time, just across targets) — one windowed query per chunk of
+ * targets against the (content_target_id, fetched_at) index, not an N+1
+ * walk, so this stays cheap at 1000+ targets. A target belongs to exactly
+ * one chunk and the window is partitioned by target, so chunking cannot
+ * double-count or drop a target. `targetIds` is always pre-scoped to the
  * caller's organization by whoever built it (see analytics.service.ts) —
  * this function itself trusts the list it's given rather than re-deriving
  * organization membership, matching content-target.repository.ts's
@@ -43,20 +70,18 @@ const EMPTY_ROLLUP: MetricsRollup = {
  */
 export async function getMetricsRollupForTargets(targetIds: string[]): Promise<MetricsRollup> {
   if (targetIds.length === 0) return EMPTY_ROLLUP;
+  const unique = [...new Set(targetIds)];
 
-  const [targetCount, publishedCount, latestSnapshots] = await Promise.all([
-    Promise.resolve(targetIds.length),
-    prisma.contentTarget.count({ where: { id: { in: targetIds }, status: "PUBLISHED" } }),
-    prisma.$queryRaw<
-      { view_count: number | null; like_count: number | null; comment_count: number | null; share_count: number | null }[]
-    >(Prisma.sql`
-      SELECT DISTINCT ON (content_target_id)
-        view_count, like_count, comment_count, share_count
-      FROM post_metrics_snapshots
-      WHERE content_target_id IN (${Prisma.join(targetIds)})
-      ORDER BY content_target_id, fetched_at DESC
-    `),
+  const chunks: string[][] = [];
+  for (let i = 0; i < unique.length; i += TARGET_CHUNK) chunks.push(unique.slice(i, i + TARGET_CHUNK));
+
+  const [targetCount, publishedCounts, snapshotChunks] = await Promise.all([
+    Promise.resolve(unique.length),
+    Promise.all(chunks.map((ids) => prisma.contentTarget.count({ where: { id: { in: ids }, status: "PUBLISHED" } }))),
+    Promise.all(chunks.map(latestSnapshotsFor)),
   ]);
+  const publishedCount = publishedCounts.reduce((a, b) => a + b, 0);
+  const latestSnapshots = snapshotChunks.flat();
 
   const rollup = latestSnapshots.reduce(
     (acc, row) => ({

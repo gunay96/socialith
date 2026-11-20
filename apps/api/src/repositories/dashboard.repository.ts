@@ -68,41 +68,50 @@ export async function getDashboardOverview(organizationId: string): Promise<Dash
   return { accounts, activeCampaigns, scheduledContent, publishingNow, publishedLast30d, failedLast30d, metrics };
 }
 
+/** MySQL returns SUM() as DECIMAL and a CAST to an integer as BIGINT (a JS bigint, which JSON cannot carry): normalize to a number. */
+type TopRow = { id: string; label: string; viewCount: number | bigint | string };
+const toTopPerformers = (rows: TopRow[]): TopPerformer[] => rows.map((r) => ({ id: r.id, label: r.label, viewCount: Number(r.viewCount) }));
+
 /**
- * Top 5 by real summed views (latest snapshot per target, via the same
- * LATERAL-join pattern analytics.repository.ts's DISTINCT ON query uses)
- * — content with no synced metrics yet simply doesn't appear rather than
- * showing a fabricated zero-ranked entry.
+ * Top 5 by real summed views (latest snapshot per target, picked with a
+ * LATERAL derived table: MySQL 8.0.14+, so 8.4 is fine) — content with no
+ * synced metrics yet simply doesn't appear rather than showing a fabricated
+ * zero-ranked entry; a target whose newest snapshot has no view count is
+ * left out (it does not fall back to an older one), as before. Ties on the
+ * view count are ordered by id so the ranking is stable, and the newest
+ * snapshot of a tie in fetched_at is the one with the greater id.
  */
 export async function getTopContent(organizationId: string): Promise<TopPerformer[]> {
-  return prisma.$queryRaw<TopPerformer[]>(Prisma.sql`
-    SELECT c.id, COALESCE(c.caption, '(no caption)') as label, SUM(latest.view_count)::int as "viewCount"
+  const rows = await prisma.$queryRaw<TopRow[]>(Prisma.sql`
+    SELECT c.id AS id, COALESCE(c.caption, '(no caption)') AS label, SUM(latest.view_count) AS viewCount
     FROM content c
     JOIN content_targets ct ON ct.content_id = c.id
     JOIN LATERAL (
-      SELECT view_count FROM post_metrics_snapshots pms
-      WHERE pms.content_target_id = ct.id ORDER BY fetched_at DESC LIMIT 1
-    ) latest ON true
+      SELECT pms.view_count AS view_count FROM post_metrics_snapshots pms
+      WHERE pms.content_target_id = ct.id ORDER BY pms.fetched_at DESC, pms.id DESC LIMIT 1
+    ) AS latest ON TRUE
     WHERE c.organization_id = ${organizationId} AND latest.view_count IS NOT NULL
     GROUP BY c.id, c.caption
-    ORDER BY "viewCount" DESC
+    ORDER BY viewCount DESC, c.id ASC
     LIMIT 5
   `);
+  return toTopPerformers(rows);
 }
 
 export async function getTopSounds(organizationId: string): Promise<TopPerformer[]> {
-  return prisma.$queryRaw<TopPerformer[]>(Prisma.sql`
-    SELECT s.id, s.title as label, SUM(latest.view_count)::int as "viewCount"
+  const rows = await prisma.$queryRaw<TopRow[]>(Prisma.sql`
+    SELECT s.id AS id, s.title AS label, SUM(latest.view_count) AS viewCount
     FROM sounds s
     JOIN content c ON c.sound_id = s.id
     JOIN content_targets ct ON ct.content_id = c.id
     JOIN LATERAL (
-      SELECT view_count FROM post_metrics_snapshots pms
-      WHERE pms.content_target_id = ct.id ORDER BY fetched_at DESC LIMIT 1
-    ) latest ON true
+      SELECT pms.view_count AS view_count FROM post_metrics_snapshots pms
+      WHERE pms.content_target_id = ct.id ORDER BY pms.fetched_at DESC, pms.id DESC LIMIT 1
+    ) AS latest ON TRUE
     WHERE s.organization_id = ${organizationId} AND latest.view_count IS NOT NULL
     GROUP BY s.id, s.title
-    ORDER BY "viewCount" DESC
+    ORDER BY viewCount DESC, s.id ASC
     LIMIT 5
   `);
+  return toTopPerformers(rows);
 }
