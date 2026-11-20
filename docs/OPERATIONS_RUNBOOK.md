@@ -83,7 +83,7 @@ what each means.
 |---|---|---|
 | **App up** | external check of `https://DOMAIN/api/health` | non-200, or body not `"status":"ok"` (503 = database or Redis down) |
 | **Containers healthy** | `$COMPOSE ps` (Status shows `(healthy)`); `docker events` / restart count | any service not healthy, or restarting repeatedly |
-| **Worker alive** | container health of `worker` (ready only when all 12 BullMQ workers are connected) | unhealthy > 2 min |
+| **Worker alive** | container health of `worker` (ready only when all 14 BullMQ workers are connected, including `media-render`) | unhealthy > 2 min |
 | **Queue backlog** | `/api/health` → `data.queues[]` (`waiting`, `delayed`, `failed`) | `waiting` growing for > 5 min, or `failed` rising |
 | **Certificate** | external check of the HTTPS expiry date | < 14 days (Caddy renews automatically at 30) |
 | **Disk** | `df -h` on the host; `docker system df` | > 80 % (mysql, media, backups, binlogs, logs) |
@@ -128,6 +128,11 @@ Window length: `SCHEDULE_STALE_AFTER_MINUTES` (default 30). Demo/seed accounts c
 | `/api/health` 503 with `redis:false` | Redis down / wrong password / OOM (`noeviction` refuses writes at 400 MB) | `$COMPOSE logs redis`; raise `maxmemory` only after finding the cause |
 | Scheduled posts did not go out | worker was down longer than the stale window → held (§5) | read the audit row; retry the targets deliberately |
 | Login works but every user is logged out after a Redis incident | sessions live in Redis | expected; users log in again |
+| A render stays "waiting" in Content Studio → Rendering | the worker is down, or another render is using the single render slot (`RENDER_CONCURRENCY`, default 1) | `$COMPOSE ps`; `$COMPOSE logs worker`; a worker that restarts picks the job up again by itself |
+| A render fails with `FONT_UNAVAILABLE` | the worker image has no font files in the configured directories | rebuild the worker image (it installs `fonts-dejavu-core` and `fonts-liberation`) or set `FONT_DIRS`; the job can then be retried |
+| A render fails with `OUTPUT_INVALID`, `RENDER_FAILED` or `RENDER_TIMEOUT` | FFmpeg problem, a damaged source, or a clip longer than `RENDER_TIMEOUT_MS` (default 15 min) | read the job's detail page (the check table and FFmpeg's last words are stored); retry; raise the timeout only for a known long clip |
+| A render fails with `SOURCE_CHANGED` or `SOURCE_MISSING` | the stored source file no longer matches the fingerprint taken when the render was requested | restore the file, or start a new render from the current file |
+| Worker disk fills during renders | scratch directories under the worker's temp directory | each job removes its own directory on success, failure and cancel; directories of a killed worker are removed at the next start (older than the stale limit); check `df` and restart the worker |
 | Certificate error after a domain change | DNS not pointing at the VPS yet | fix DNS (owner action), `$COMPOSE restart caddy` |
 | A natively connected account's publish / status poll / analytics sync fails at the token step (log mentions `pg_advisory_xact_lock` or an unknown function) | TD-59: native OAuth token refresh is PostgreSQL-only and must not be used on MySQL; a native connection should not exist on this stack | do not retry in a loop; disconnect the native account and publish through Upload-Post; see `TD59_REMEDIATION_TASK.md` §2 |
 

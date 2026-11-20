@@ -1,6 +1,6 @@
 # Content Recipe Engine (Phase 5B)
 
-A **recipe** says how a source picture or video and an approved text are combined: where the text sits, how it looks and moves, how long the result lasts, and what is exported. **Phase 5B defines, stores and previews recipes. It does not render media.** The renderer (Phase 5C) turns a recipe into a file; until then nothing on this page produces an asset, and the interface says so wherever a preview appears ("Preview · not a rendered file").
+A **recipe** says how a source picture or video and an approved text are combined: where the text sits, how it looks and moves, how long the result lasts, and what is exported. **Phase 5B defined, stored and previewed recipes; Phase 5C turns a recipe into a real file with FFmpeg** (see `MEDIA_RENDERING.md`). Nothing on the recipe screens produces an asset, and the interface says so wherever a preview appears ("Preview · not a rendered file"); files are made in **Content Studio → Rendering**.
 
 Screens: **Content Studio → Recipes** (`/studio/recipes`: presets, list, filters) and the **recipe builder** (`/studio/recipes/:id`: settings on the left, live preview on the right).
 
@@ -56,7 +56,7 @@ When several recipes could be used for a page they are offered **most specific f
 
 Choose, in the builder: a **page** and optionally a **page group**, a **picture or video** from the Media Library (only ready files; ones the recipe does not accept are dimmed), and a **text** from the Text Library (approved texts by default, limited to those that suit the chosen page and the recipe's text category; "also show texts that are not approved" is for trying a layout only). A **Quick adjust** panel changes font size, position and nudge in the preview without touching the recipe, with **Apply to the recipe** to keep them; **Remember these preview choices** stores the selections and adjustments so the recipe reopens as it was left. Saving, duplicating, archiving are in the header.
 
-How accurate is it: positions and sizes come from one shared layout function (`computeLayout`) as fractions of the frame, so the **settings** are shown exactly (position, size relative to the frame, alignment, colors, background, aspect, fit, motion timing). What can differ in the final file: line breaks and glyph widths, because the browser uses its own copy of the font and the renderer wraps with its own font files; the motion shown for typewriter and line-by-line is an illustration whose exact timing the renderer defines (5C). The interface states this under every preview. Motion is not played when the system asks for reduced motion.
+How accurate is it (changed in 5C): the preview no longer lays text out in the browser. `POST /api/recipes/evaluate` returns the **plan the renderer follows** (`plan`: line breaks, font size, each line's left, top and baseline in output pixels, the box or band, the safe area; `timeline`: entry, exit, typewriter steps and line-by-line start times; `subtitles`; `output`: video or still and its length). The preview draws a frame of the real output size (scaled with CSS), places every line at the plan's pixel, and plays the timeline with a clock and a scrubber (`stateAt`), so line breaks, positions and animation timing are the renderer's own numbers, not an illustration. A **safe area guide** can be switched on (its margins are an assumption, `TD-72`). What can still differ in the file: the shape of the letters (the browser uses its own copy of the font; the renderer uses the worker's file), anti-aliasing and video compression. The interface states this under every preview. With reduced motion the preview starts paused at a moment where everything is visible; Play and the slider still work.
 
 **Checks** under the preview (`ERROR` must fix, `WARNING` look, `INFO` note): media type not accepted, file not ready, rights "do not use", unmeasured size, picture smaller than the output, cropping explained, animation on a still image without a fixed length, text not approved (a **warning** in a preview, an **error** when rendering), archived / rejected / "do not use" text, text category or language not matching, the page's own rules (length, avoided terms, fact-checking reminder; reused from Phase 4), recipe or text limited to other pages / groups / categories, text near the platform's own buttons (an assumption, not a measured safe area).
 
@@ -77,11 +77,11 @@ Everyone can read recipes and run the preview calculation (it stores nothing, re
 
 ## 9. Code map
 
-`packages/studio`: `recipe.ts` (schema, defaults), `recipe-presets.ts`, `recipe-resolve.ts` (inheritance and sources), `recipe-select.ts`, `recipe-compat.ts`, `layout.ts`, `fonts.ts`, `text.ts`. `apps/api`: `services/recipe.service.ts`. `apps/web`: `lib/recipes.tsx` (preview), `studio/recipes/*`.
+`packages/studio`: `recipe.ts` (schema, defaults), `recipe-presets.ts`, `recipe-resolve.ts` (inheritance and sources), `recipe-select.ts`, `recipe-compat.ts`, `layout.ts`, `fonts.ts`, `text.ts`. `apps/api`: `services/recipe.service.ts`. `apps/web`: `lib/recipes.tsx` (plan-based preview), `studio/recipes/*`. Rendering (5C): `packages/studio` `font-metrics*.ts`, `text-plan.ts`, `timeline.ts`, `subtitles.ts`, `render-output.ts`; `packages/video-engine/src/render/*`.
 
 ## 10. Not in this phase (and what that means)
 
-* **No rendering**: no FFmpeg, no output file, no thumbnail of the composition. The preview is a browser drawing.
-* The animations (typewriter, line by line, slide, zoom) are **definitions plus a preview**. Which of them FFmpeg can render faithfully, and how, is decided and verified in 5C; any that cannot be rendered will be reported then rather than silently dropped.
+* **The recipe screens render nothing**: the preview is a browser drawing of the renderer's plan. Real files are made in the Rendering tab (Phase 5C, `MEDIA_RENDERING.md`).
+* All five animations (fade in/out, slide, zoom, typewriter, line by line) are rendered and verified in 5C. A still image cannot animate, and the evaluation and the job say so.
 * Platform limits (duration, size, aspect) for the export are 5C (with the verified / assumed distinction).
 * Recipes cannot yet be chosen automatically for a publication (5F).

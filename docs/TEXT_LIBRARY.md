@@ -45,7 +45,7 @@ Select texts and act on all of them: **categorize** (add, remove, set), set the 
 
 ## 6. Usage history
 
-A text's history records where it was used: when, on which page and campaign, with which recipe and source file, and the publication (`Content`) it belongs to. References are plain ids on purpose: the history survives the later removal of what it points at (the interface then shows the reference as gone). **A preview never counts as a use.** Today a person records a use (`Record a use`, approved texts only); publishing (5F) and rendering (5C) will add entries automatically. Only an **approved** text can be recorded as used.
+A text's history records where it was used: when, on which page and campaign, with which recipe and source file, and the publication (`Content`) it belongs to. References are plain ids on purpose: the history survives the later removal of what it points at (the interface then shows the reference as gone). **A preview never counts as a use.** A person can record a use (`Record a use`, approved texts only); **a successful render adds a `RENDER` entry automatically** (Phase 5C: the text, page, campaign, recipe and the output file; exactly one per output, even if the job is delivered again, and none if the text was deleted meanwhile). Publishing (5F) will add its own. Only an **approved** text can be recorded as used.
 
 ## 7. Import: TXT, CSV, XLSX
 
@@ -89,4 +89,4 @@ All routes require a session, are scoped to the organization (another organizati
 
 ## 11. Not in this phase
 
-AI drafting and rewriting (5D); automatic usage entries from rendering and publishing (5C/5F); near-duplicate matching; per-text approval workflows with several reviewers; export.
+AI drafting and rewriting (5D); automatic usage entries from publishing (5F; rendering writes its own since 5C); near-duplicate matching; per-text approval workflows with several reviewers; export.
