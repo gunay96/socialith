@@ -83,7 +83,7 @@ what each means.
 |---|---|---|
 | **App up** | external check of `https://DOMAIN/api/health` | non-200, or body not `"status":"ok"` (503 = database or Redis down) |
 | **Containers healthy** | `$COMPOSE ps` (Status shows `(healthy)`); `docker events` / restart count | any service not healthy, or restarting repeatedly |
-| **Worker alive** | container health of `worker` (ready only when all 11 BullMQ workers are connected) | unhealthy > 2 min |
+| **Worker alive** | container health of `worker` (ready only when all 12 BullMQ workers are connected) | unhealthy > 2 min |
 | **Queue backlog** | `/api/health` → `data.queues[]` (`waiting`, `delayed`, `failed`) | `waiting` growing for > 5 min, or `failed` rising |
 | **Certificate** | external check of the HTTPS expiry date | < 14 days (Caddy renews automatically at 30) |
 | **Disk** | `df -h` on the host; `docker system df` | > 80 % (mysql, media, backups, binlogs, logs) |
