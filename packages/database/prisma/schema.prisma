@@ -88,6 +88,8 @@ model Organization {
   soundMusicMappings     SoundMusicMapping[]
   publicationEvents      PublicationEvent[]
   publishingSettings     PublishingSettings?
+  pageCategories         PageCategory[]
+  pageGroups             PageGroup[]
 
   @@map("organizations")
 }
@@ -257,6 +259,8 @@ model SocialAccount {
   platformConnection PlatformConnection?
   contentTargets     ContentTarget[]
   uploadPostAccount  UploadPostConnectedAccount?
+  // Phase 4: the thematic page authorized to publish through this destination (at most one).
+  managedPage        ManagedPage?
 
   // Composite unique — see the model comment above for why this is
   // per-organization, not global.
@@ -359,6 +363,9 @@ model Campaign {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
   content      Content[]
+  // Phase 4: thematic pages / page groups this campaign runs on.
+  pages        CampaignPage[]
+  pageGroups   CampaignPageGroup[]
 
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
@@ -863,6 +870,15 @@ enum MusicAvailability {
   UNAVAILABLE
 }
 
+// Phase 2 created this as a minimal label that Upload-Post profiles could be mapped to. Phase 4 (Page Network) extends
+// it IN PLACE - nothing is renamed or dropped - into the thematic page record: one row = one page on one platform.
+// Every new column is nullable, so a Phase 2 row stays valid (it simply reads as an incomplete page profile).
+//
+// Four things stay separate (see docs/PAGE_NETWORK_ARCHITECTURE.md):
+//   ManagedPage                the thematic page (this row: editorial facts, category, groups)
+//   SocialAccount              the Publishing Destination (an authorized, publishable account) - linked by socialAccountId
+//   UploadPostProfile/Account  the provider's records - linked to the destination exactly as in Phase 2, never copied here
+//   Creator                    an individual content creator - a different entity, never a page
 model ManagedPage {
   id             String            @id @default(cuid())
   organizationId String            @map("organization_id")
@@ -870,15 +886,134 @@ model ManagedPage {
   slug           String
   description    String?           @db.Text
   status         ManagedPageStatus @default(ACTIVE)
+  // Phase 4 ---------------------------------------------------------------------------------------------------
+  categoryId        String?  @map("category_id")
+  // The platform this page lives on (null = a Phase 2 row that was never completed).
+  platform          Platform?
+  // The page's public handle, normalized (lower-case, no leading @). Unique per (organization, platform).
+  username          String?
+  profileUrl        String?  @map("profile_url") @db.Text
+  targetAudience    String?  @map("target_audience") @db.Text
+  // Content language of the page (BCP-47 primary tag, e.g. "tr", "en"); null = follow the category.
+  language          String?  @db.VarChar(16)
+  // The page's own editorial identity text; overrides the category's default editorial style.
+  editorialIdentity String?  @map("editorial_identity") @db.Text
+  // Structured editorial overrides (EditorialProfile in packages/publishing); a value here beats the category's.
+  profile           Json?
+  internalNotes     String?  @map("internal_notes") @db.Text
+  // The Publishing Destination this page is authorized to publish through. At most one page per destination
+  // (unique), and the destination is never copied or recreated: this is only a reference.
+  socialAccountId   String?  @unique @map("social_account_id")
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
 
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category           PageCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  socialAccount      SocialAccount?      @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
   uploadPostProfiles UploadPostProfile[]
+  groupMemberships   PageGroupMember[]
+  campaignPages      CampaignPage[]
 
   @@unique([organizationId, slug])
+  // One page record per real page: the same handle cannot be registered twice on a platform (NULLs do not collide).
+  @@unique([organizationId, platform, username])
   @@index([organizationId, status])
+  @@index([organizationId, categoryId])
+  @@index([organizationId, platform])
   @@map("managed_pages")
+}
+
+// Phase 4: a configurable page category (Motivation, Football, ...). Carries the DEFAULT editorial style and content
+// preferences that every page of the category inherits unless the page sets its own. Archived, never deleted.
+model PageCategory {
+  id                    String            @id @default(cuid())
+  organizationId        String            @map("organization_id")
+  name                  String
+  slug                  String
+  description           String?           @db.Text
+  language              String            @default("tr") @db.VarChar(16)
+  defaultEditorialStyle String?           @map("default_editorial_style") @db.Text
+  // EditorialProfile defaults (content preferences, visual preferences, guidelines, rules).
+  contentPreferences    Json?             @map("content_preferences")
+  status                ManagedPageStatus @default(ACTIVE)
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pages        ManagedPage[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("page_categories")
+}
+
+// Phase 4: an operational group of pages ("Motivation Network"). A page may belong to several groups (join table).
+model PageGroup {
+  id                 String            @id @default(cuid())
+  organizationId     String            @map("organization_id")
+  name               String
+  slug               String
+  description        String?           @db.Text
+  // Group-level content preferences (EditorialProfile subset), applied between the category and the page.
+  contentPreferences Json?             @map("content_preferences")
+  status             ManagedPageStatus @default(ACTIVE)
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      PageGroupMember[]
+  campaigns    CampaignPageGroup[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("page_groups")
+}
+
+model PageGroupMember {
+  id      String   @id @default(cuid())
+  groupId String   @map("group_id")
+  pageId  String   @map("page_id")
+  addedAt DateTime @default(now()) @map("added_at")
+
+  group PageGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  page  ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  // A page is in a given group at most once, but may be in many groups.
+  @@unique([groupId, pageId])
+  @@index([pageId])
+  @@map("page_group_members")
+}
+
+// Phase 4: which thematic pages (directly, or through a page group) a campaign is run on. A relationship record only:
+// it does not decide what is published where (that stays per publication, approved in the Publishing Center).
+model CampaignPage {
+  id         String   @id @default(cuid())
+  campaignId String   @map("campaign_id")
+  pageId     String   @map("page_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  campaign Campaign    @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  page     ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, pageId])
+  @@index([pageId])
+  @@map("campaign_pages")
+}
+
+model CampaignPageGroup {
+  id         String   @id @default(cuid())
+  campaignId String   @map("campaign_id")
+  groupId    String   @map("group_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  campaign Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  group    PageGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, groupId])
+  @@index([groupId])
+  @@map("campaign_page_groups")
 }
 
 model Creator {
