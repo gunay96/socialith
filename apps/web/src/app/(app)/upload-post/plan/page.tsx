@@ -1,6 +1,7 @@
 "use client";
 
-import { Banner, Card, Chip, Stat, StatusBadge, TONES, formatDateTime, useFetch } from "@/lib/upload-post";
+import { Banner, Card, Chip, Stat, StatusBadge, TONES, formatDateTime, formatPlan, useFetch } from "@/lib/upload-post";
+import { PlatformAvailabilityCard } from "../platform-availability";
 
 interface Plan {
   plan: string | null;
@@ -30,7 +31,7 @@ export default function PlanPage() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Plan and profile capacity">
           <div className="grid grid-cols-2 gap-4">
-            <Stat label="Plan" value={data.plan ?? "—"} hint={`source: ${data.source}`} />
+            <Stat label="Plan" value={formatPlan(data.plan)} hint={`source: ${data.source}`} />
             <Stat label="Profile limit" value={data.profileLimit ?? "unknown"} hint="as reported by the provider" />
             <Stat label="Profiles in use" value={data.profilesUsed} />
             <Stat label="Remaining" value={data.profilesRemaining ?? "—"} />
@@ -58,6 +59,8 @@ export default function PlanPage() {
           <p className="mt-3 text-xs text-muted">Socialith does not use AI Shorts in this phase; the figure is shown for plan awareness only. Monthly upload limits are enforced by Upload-Post and surface as a clear failure on the publication.</p>
         </Card>
       </div>
+
+      <PlatformAvailabilityCard />
 
       <Card title="Recent synchronizations">
         <div className="overflow-x-auto">

@@ -93,7 +93,10 @@ export default function ProfilesPage() {
                     </td>
                     <td className="px-3 py-2">{p.managedPage ? p.managedPage.name : <span className="text-muted">—</span>}</td>
                     <td className="px-3 py-2">
-                      <StatusBadge status={p.status} />
+                      <div className="flex flex-wrap gap-1">
+                        <StatusBadge status={p.status} />
+                        {p.blocked && <Chip tone={TONES.RED} title="Upload-Post reports this profile as blocked; it is never used for publishing">BLOCKED</Chip>}
+                      </div>
                     </td>
                     <td className="px-3 py-2 text-muted">{formatDateTime(p.lastSyncedAt)}</td>
                   </tr>

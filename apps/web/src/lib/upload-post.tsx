@@ -31,6 +31,7 @@ export interface UploadPostProfileRow {
   username: string;
   displayName: string | null;
   status: "ACTIVE" | "REMOVED";
+  blocked?: boolean;
   pendingPlatforms: string[] | null;
   lastSyncedAt: string | null;
   managedPageId: string | null;
@@ -88,6 +89,28 @@ export interface Overview extends IntegrationContext {
   mapping: { managedPages: number; creators: number };
   lastSync: { id: string; status: string; trigger: string; startedAt: string; finishedAt: string | null; errorKind: string | null; errorMessage: string | null } | null;
   lastSuccessfulSyncAt: string | null;
+}
+
+export type PlatformState = "AVAILABLE" | "REAUTH_REQUIRED" | "PENDING" | "UNAVAILABLE";
+
+export interface PlatformAvailability {
+  platform: string;
+  label: string;
+  publishable: boolean;
+  state: PlatformState;
+  reason: string | null;
+  accounts: { connected: number; reauthRequired: number; pending: number; disconnected: number };
+  destinations: number;
+  connectableProfiles: { id: string; username: string }[];
+  features: { key: string; label: string; state: "AVAILABLE" | "UNAVAILABLE"; reason: string | null }[];
+}
+
+export interface Capabilities {
+  synced: boolean;
+  lastSyncedAt: string | null;
+  plan: { name: string | null; profileLimit: number | null; profilesUsed: number; profilesRemaining: number | null };
+  platforms: PlatformAvailability[];
+  notes: string[];
 }
 
 export interface PublicationRow {
@@ -173,7 +196,14 @@ const STATUS_STYLES: Record<string, { label: string; tone: string }> = {
   VERIFIED_AVAILABLE: { label: "VERIFIED AVAILABLE", tone: GREEN },
   UNVERIFIED: { label: "UNVERIFIED", tone: NEUTRAL },
   UNAVAILABLE: { label: "UNAVAILABLE", tone: RED },
+  AVAILABLE: { label: "AVAILABLE", tone: GREEN },
 };
+
+/** The provider reports the plan in varying case ("Default" on one endpoint, "default" on another); show it uniformly. */
+export function formatPlan(plan: string | null | undefined): string {
+  if (!plan) return "—";
+  return plan.charAt(0).toUpperCase() + plan.slice(1).toLowerCase();
+}
 
 export function StatusBadge({ status }: { status: string }) {
   const style = STATUS_STYLES[status] ?? { label: status.replace(/_/g, " "), tone: NEUTRAL };

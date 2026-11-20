@@ -40,6 +40,7 @@ const idParam = (req: Request) => req.params.id!;
 export const getOverview: RequestHandler = wrap(async (req) => ({ data: await service.getOverview(user(req)) }));
 export const getHealth: RequestHandler = wrap(async (req) => ({ data: await service.getHealth(user(req), req.query.refresh === "true") }));
 export const getPlan: RequestHandler = wrap(async (req) => ({ data: await service.getPlan(user(req)) }));
+export const getCapabilities: RequestHandler = wrap(async (req) => ({ data: await service.getCapabilities(user(req)) }));
 export const requestSync: RequestHandler = wrap(async (req) => ({ status: 202, data: await service.requestSync(user(req)) }));
 
 export const listProfiles: RequestHandler = wrap(async (req) => ({ data: await service.listProfiles(user(req), parse(schema.listProfilesQuerySchema, req.query, "query")) }));

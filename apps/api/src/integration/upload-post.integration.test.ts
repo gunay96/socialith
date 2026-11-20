@@ -122,7 +122,7 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       expect((await http("GET", "/api/upload-post/overview")).status).toBe(401);
       expect((await http("POST", "/api/upload-post/sync")).status).toBe(401);
 
-      for (const path of ["/api/upload-post/overview", "/api/upload-post/profiles", "/api/upload-post/accounts", "/api/upload-post/publications", "/api/upload-post/scheduled", "/api/upload-post/plan", "/api/upload-post/health", "/api/managed-pages", "/api/creators"]) {
+      for (const path of ["/api/upload-post/overview", "/api/upload-post/profiles", "/api/upload-post/accounts", "/api/upload-post/publications", "/api/upload-post/scheduled", "/api/upload-post/plan", "/api/upload-post/health", "/api/upload-post/capabilities", "/api/managed-pages", "/api/creators"]) {
         expect((await http("GET", path, { cookie: viewer })).status, path).toBe(200);
       }
       expect((await http("POST", "/api/upload-post/sync", { cookie: viewer })).status).toBe(403);
@@ -559,6 +559,114 @@ suite("Upload-Post API (real MySQL + Redis, real express app, contract double)",
       const reserialized = JSON.stringify(JSON.parse(spaced));
       const bad = await post(spaced, { ...sign(WEBHOOK_SECRET, reserialized), "x-upload-post-delivery": "d-ws2" });
       expect(bad.status).toBe(401);
+    });
+  });
+
+  describe("trial plan: empty and unconnected profiles, platform availability", () => {
+    const api = (cookie: string, path: string) => http("GET", `/api/upload-post${path}`, { cookie });
+    const trialRun = (orgId: string, over: Record<string, unknown> = {}) =>
+      prisma.uploadPostSyncRun.create({ data: { organizationId: orgId, trigger: "MANUAL", status: "SUCCEEDED", finishedAt: new Date(), profilesSeen: 1, plan: "default", profileLimit: 2, ...over } });
+    const platformsOf = (data: { platforms: { platform: string; state: string }[] }) => Object.fromEntries(data.platforms.map((p) => [p.platform, p.state]));
+
+    it("nothing synchronized yet: no profiles, every platform UNAVAILABLE with a reason, no plan figures invented", async () => {
+      const a = await makeOrg("ADMIN");
+      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      expect(cap).toMatchObject({ synced: false, lastSyncedAt: null, plan: { name: null, profileLimit: null, profilesUsed: 0, profilesRemaining: null } });
+      expect(platformsOf(cap)).toEqual({ tiktok: "UNAVAILABLE", instagram: "UNAVAILABLE", youtube: "UNAVAILABLE" });
+      expect(cap.platforms[0].reason).toMatch(/not been synchronized/);
+      expect((await api(a.cookie, "/profiles")).json.data).toMatchObject({ items: [], total: 0 });
+      expect((await api(a.cookie, "/accounts")).json.data).toMatchObject({ items: [], total: 0 });
+    });
+
+    it("the live trial state (plan default, limit 2, one profile, no accounts) is shown as it is: capacity from the provider, every platform unavailable", async () => {
+      const a = await makeOrg("ADMIN");
+      const viewer = await addUser(a.orgId, "VIEWER");
+      const profile = await prisma.uploadPostProfile.create({ data: { organizationId: a.orgId, username: "example_profile", lastSyncedAt: new Date() } });
+      await trialRun(a.orgId);
+      const previousPlan = mock.state.plan;
+      mock.state.plan = "Default";
+      try {
+        resetUploadPostClientForTests();
+        const cap = (await api(viewer, "/capabilities")).json.data;
+        expect(cap).toMatchObject({ synced: true, plan: { name: "default", profileLimit: 2, profilesUsed: 1, profilesRemaining: 1 } });
+        expect(platformsOf(cap)).toEqual({ tiktok: "UNAVAILABLE", instagram: "UNAVAILABLE", youtube: "UNAVAILABLE" });
+        const tiktok = cap.platforms.find((p: { platform: string }) => p.platform === "tiktok");
+        expect(tiktok.reason).toMatch(/has not confirmed access/);
+        expect(tiktok.features[0]).toMatchObject({ key: "music", state: "UNAVAILABLE" });
+        expect(tiktok.connectableProfiles).toEqual([{ id: profile.id, username: "example_profile" }]);
+
+        const plan = (await api(viewer, "/plan")).json.data;
+        expect(plan).toMatchObject({ plan: "Default", profileLimit: 2, profilesUsed: 1, profilesRemaining: 1, limitReached: false, source: "live" });
+        const overview = (await api(viewer, "/overview")).json.data;
+        expect(overview.status).toBe("CONNECTED"); // 1 of 2 profiles used is not "limit reached"
+        expect(overview).toMatchObject({ profiles: { active: 1, limit: 2 }, accounts: { byStatus: {}, byPlatform: {}, destinations: 0 } });
+
+        const profiles = (await api(viewer, "/profiles")).json.data;
+        expect(profiles.total).toBe(1);
+        expect(profiles.items[0]).toMatchObject({ username: "example_profile", blocked: false, accounts: [] });
+        expect((await api(viewer, "/accounts")).json.data.total).toBe(0);
+      } finally {
+        mock.state.plan = previousPlan;
+      }
+    });
+
+    it("the profile limit is reached only when the provider's own limit is used up (2 of 2), never from a constant", async () => {
+      const a = await makeOrg("ADMIN");
+      await prisma.uploadPostProfile.createMany({ data: [{ organizationId: a.orgId, username: "one" }, { organizationId: a.orgId, username: "two" }] });
+      await trialRun(a.orgId, { profilesSeen: 2 });
+      const overview = (await api(a.cookie, "/overview")).json.data;
+      expect(overview.status).toBe("LIMIT_REACHED");
+      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      expect(cap.plan).toMatchObject({ profileLimit: 2, profilesUsed: 2, profilesRemaining: 0 });
+    });
+
+    it("Instagram and YouTube connected, TikTok not: only those two are available, and they can be enabled; TikTok cannot exist as a destination", async () => {
+      const a = await makeOrg("ADMIN");
+      const profile = await prisma.uploadPostProfile.create({ data: { organizationId: a.orgId, username: "example_profile", lastSyncedAt: new Date() } });
+      await trialRun(a.orgId);
+      const ig = await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: profile.id, platform: "instagram", providerAccountId: "17841400000000009", handle: "my.band", lastSeenAt: new Date() } });
+      await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: profile.id, platform: "youtube", providerAccountId: "UCmyBandChannel000009", handle: "mybandtv", lastSeenAt: new Date() } });
+
+      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      expect(platformsOf(cap)).toEqual({ tiktok: "UNAVAILABLE", instagram: "AVAILABLE", youtube: "AVAILABLE" });
+      expect(cap.platforms.find((p: { platform: string }) => p.platform === "tiktok").connectableProfiles).toHaveLength(1);
+      expect(cap.platforms.find((p: { platform: string }) => p.platform === "instagram").connectableProfiles).toEqual([]);
+
+      const enabled = await http("POST", `/api/upload-post/accounts/${ig.id}/destination`, { cookie: a.cookie });
+      expect(enabled.status).toBe(200);
+      const after = (await api(a.cookie, "/capabilities")).json.data;
+      expect(after.platforms.find((p: { platform: string }) => p.platform === "instagram").destinations).toBe(1);
+      // no TikTok account row exists, so there is nothing that could be enabled or published to
+      expect(await prisma.uploadPostConnectedAccount.count({ where: { organizationId: a.orgId, platform: "tiktok" } })).toBe(0);
+      expect(await prisma.socialAccount.count({ where: { organizationId: a.orgId, platform: "TIKTOK" } })).toBe(0);
+    });
+
+    it("a profile the provider reports as blocked is not usable: platforms unavailable and the destination is refused", async () => {
+      const a = await makeOrg("ADMIN");
+      const profile = await prisma.uploadPostProfile.create({ data: { organizationId: a.orgId, username: "blocked_profile", blocked: true, lastSyncedAt: new Date() } });
+      await trialRun(a.orgId);
+      const yt = await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: profile.id, platform: "youtube", providerAccountId: "UCblocked00000000001", lastSeenAt: new Date() } });
+      const cap = (await api(a.cookie, "/capabilities")).json.data;
+      expect(platformsOf(cap).youtube).toBe("UNAVAILABLE");
+      expect(cap.platforms.find((p: { platform: string }) => p.platform === "youtube").reason).toMatch(/blocked/);
+      const r = await http("POST", `/api/upload-post/accounts/${yt.id}/destination`, { cookie: a.cookie });
+      expect(r.status).toBe(409);
+      expect(r.json.error?.message).toMatch(/blocked/);
+      expect(await prisma.socialAccount.count({ where: { organizationId: a.orgId } })).toBe(0);
+    });
+
+    it("capabilities are organization-scoped and never carry the key", async () => {
+      const a = await makeOrg("ADMIN");
+      const b = await makeOrg("ADMIN");
+      const pa = await prisma.uploadPostProfile.create({ data: { organizationId: a.orgId, username: "only_a" } });
+      await prisma.uploadPostConnectedAccount.create({ data: { organizationId: a.orgId, profileId: pa.id, platform: "instagram", providerAccountId: "1784140000000000a" } });
+      await trialRun(a.orgId);
+      await trialRun(b.orgId, { profilesSeen: 0 });
+      const forB = await api(b.cookie, "/capabilities");
+      expect(platformsOf(forB.json.data).instagram).toBe("UNAVAILABLE");
+      expect(forB.json.data.platforms[0].connectableProfiles).toEqual([]);
+      expect(forB.text).not.toContain(KEY);
+      expect(forB.text).not.toContain("only_a");
     });
   });
 });

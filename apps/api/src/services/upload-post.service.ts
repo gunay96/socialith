@@ -10,6 +10,7 @@ import {
 import type { Prisma } from "@socialith/database";
 import { ApiHttpError } from "../middleware/error-handler.js";
 import { createAuditLog } from "../repositories/audit-log.repository.js";
+import { derivePlatformAvailability } from "./upload-post-capabilities.js";
 import { enqueueUploadPostSync, getUploadPostClient, probeProvider, type HealthProbe } from "../lib/upload-post.js";
 import type { SafeUser } from "../types/auth.js";
 
@@ -186,6 +187,47 @@ export async function getPlan(actor: SafeUser) {
   };
 }
 
+/**
+ * Platform availability as CONFIRMED by the provider (see upload-post-capabilities.ts): derived only from synchronized
+ * data, so an account that does not exist at the provider can never show up as available. Includes the plan facts
+ * reported by the provider because connecting a platform needs a free profile slot.
+ */
+export async function getCapabilities(actor: SafeUser) {
+  const orgId = actor.organizationId;
+  const [profiles, lastSuccess] = await Promise.all([
+    prisma.uploadPostProfile.findMany({
+      where: { organizationId: orgId },
+      select: { id: true, username: true, status: true, blocked: true, pendingPlatforms: true, accounts: { select: { platform: true, status: true, socialAccountId: true, capabilities: true } } },
+      orderBy: { username: "asc" },
+    }),
+    prisma.uploadPostSyncRun.findFirst({ where: { organizationId: orgId, status: "SUCCEEDED" }, orderBy: { startedAt: "desc" } }),
+  ]);
+  const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
+  const platforms = derivePlatformAvailability({
+    synced: Boolean(lastSuccess),
+    profiles: profiles.map((p) => ({
+      id: p.id,
+      username: p.username,
+      status: p.status,
+      blocked: p.blocked,
+      pendingPlatforms: strings(p.pendingPlatforms),
+      accounts: p.accounts.map((a) => ({ platform: a.platform, status: a.status, socialAccountId: a.socialAccountId, capabilities: strings(a.capabilities) })),
+    })),
+  });
+  const active = profiles.filter((p) => p.status === "ACTIVE").length;
+  const limit = lastSuccess?.profileLimit ?? null;
+  return {
+    synced: Boolean(lastSuccess),
+    lastSyncedAt: lastSuccess?.finishedAt ?? null,
+    plan: { name: lastSuccess?.plan ?? null, profileLimit: limit, profilesUsed: active, profilesRemaining: limit === null ? null : Math.max(0, limit - active) },
+    platforms,
+    notes: [
+      "Upload-Post does not publish a per-plan list of platforms through its API. A platform counts as available only after an account for it is connected at Upload-Post and has been synchronized; nothing is assumed from the plan name.",
+      "Accounts are connected in the Upload-Post dashboard (one account per platform per profile). Socialith reads them; it never fakes a connection.",
+    ],
+  };
+}
+
 export async function requestSync(actor: SafeUser) {
   const ctx = await integrationContext(actor);
   if (!ctx.configured) throw toApiError(new UploadPostError({ kind: "NOT_CONFIGURED", message: "not configured", retryable: false }));
@@ -200,7 +242,7 @@ export async function requestSync(actor: SafeUser) {
 
 const accountInclude = {
   creator: { select: { id: true, name: true, status: true } },
-  profile: { select: { id: true, username: true, displayName: true, status: true } },
+  profile: { select: { id: true, username: true, displayName: true, status: true, blocked: true } },
   socialAccount: { select: { id: true, status: true, publishingProvider: true } },
 } satisfies Prisma.UploadPostConnectedAccountInclude;
 
@@ -339,6 +381,7 @@ export async function enableDestination(actor: SafeUser, accountId: string) {
     throw new ApiHttpError(409, ERROR_CODES.CONFLICT, `Socialith cannot publish to ${account.platform} yet (supported: ${PUBLISHABLE_PLATFORMS.join(", ")}).`);
   }
   if (account.profile.status !== "ACTIVE") throw new ApiHttpError(409, ERROR_CODES.CONFLICT, "The Upload-Post profile no longer exists at the provider.");
+  if (account.profile.blocked) throw new ApiHttpError(409, ERROR_CODES.CONFLICT, "Upload-Post reports this profile as blocked, so it cannot be used as a publishing destination.");
   if (account.status !== "CONNECTED") {
     throw new ApiHttpError(409, ERROR_CODES.REAUTH_REQUIRED, account.status === "REAUTH_REQUIRED" ? "Reconnect this account in Upload-Post first (authorization expired)." : "This account is disconnected in Upload-Post.");
   }

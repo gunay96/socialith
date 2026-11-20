@@ -17,6 +17,7 @@ export function createUploadPostRouter(): Router {
   r.get("/upload-post/overview", ...read, c.getOverview);
   r.get("/upload-post/health", ...read, c.getHealth);
   r.get("/upload-post/plan", ...read, c.getPlan);
+  r.get("/upload-post/capabilities", ...read, c.getCapabilities);
   r.post("/upload-post/sync", ...admin, c.requestSync);
 
   r.get("/upload-post/profiles", ...read, c.listProfiles);

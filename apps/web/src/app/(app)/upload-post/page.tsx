@@ -5,6 +5,7 @@ import Link from "next/link";
 import { apiPost, ApiError } from "@/lib/api";
 import { useCurrentUser } from "@/lib/auth-context";
 import { Banner, Card, Chip, Stat, StatusBadge, TONES, formatDateTime, useFetch, type Overview } from "@/lib/upload-post";
+import { PlatformAvailabilityCard } from "./platform-availability";
 
 export default function UploadPostOverviewPage() {
   const me = useCurrentUser();
@@ -39,6 +40,14 @@ export default function UploadPostOverviewPage() {
       )}
       {data.configured && data.organizationIssue && <Banner tone="warn">{data.organizationIssue}</Banner>}
       {message && <Banner tone={message.tone}>{message.text}</Banner>}
+      {data.configured && data.lastSuccessfulSyncAt && data.profiles.active === 0 && (
+        <Banner tone="info">Upload-Post reports no profiles yet. Create a profile in Upload-Post, connect a social account to it, then run Sync now.</Banner>
+      )}
+      {data.configured && data.lastSuccessfulSyncAt && data.profiles.active > 0 && Object.keys(data.accounts.byStatus).length === 0 && (
+        <Banner tone="info">
+          {data.profiles.active} profile{data.profiles.active === 1 ? "" : "s"} synchronized, but no social account is connected in {data.profiles.active === 1 ? "it" : "them"} yet. Connect accounts in Upload-Post (Instagram and YouTube where your plan allows), then run Sync now. Nothing is shown as connected until Upload-Post reports it.
+        </Banner>
+      )}
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -93,6 +102,8 @@ export default function UploadPostOverviewPage() {
           </div>
         </Card>
       </div>
+
+      <PlatformAvailabilityCard compact />
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card title="Last synchronization">
