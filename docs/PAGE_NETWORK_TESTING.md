@@ -10,7 +10,7 @@ Tiers: **automated tests** (pure rules + real MySQL/Redis through the real expre
 | `@socialith/web` (incl. editor draft helpers, 5 new) | 13 | nothing |
 | API unit | 237 (+1 POSIX-only skip) | nothing |
 | Worker unit / config / auth / upload-post / video-engine | 75 / 22 / 37 / 45 / 7 | nothing |
-| **API integration** | **178** (131 before + **47** in `page-network.integration.test.ts`) | MySQL 8.4 + Redis |
+| **API integration** | **189** (131 before + **47** in `page-network.integration.test.ts` + **11** in `analytics.integration.test.ts`, TD-54) | MySQL 8.4 + Redis |
 | Worker integration | 112 (unchanged) | MySQL 8.4 + Redis |
 
 Phase 1-3 suites run **unchanged**; no assertion was edited or removed.
@@ -37,7 +37,7 @@ Phase 1-3 suites run **unchanged**; no assertion was edited or removed.
 
 ## 3. Browser verification (by hand, once)
 
-Against the real API + MySQL 8.4 + Redis with a seeded throwaway organization (pages in every account state, three groups, a campaign): overview numbers matched the data (7 pages, 1 ready, 1 reconnect, 1 disconnected, creator account excluded from "unused"); pages list and filters; page details with inheritance (formats from the category, aspect ratio from the page); identity editor saving a rule and the text checker returning both warnings; account mapping with live states and reasons; groups and group detail with statistics; categories; the campaign card. As a **viewer**: no create/edit/archive controls, internal notes and provider profile hidden. **Found and fixed:** wide tables stretched the whole page (content container lacked `min-w-0`). **Found, not fixed (not this phase):** the campaign "Performance" block errors on MySQL (TD-54).
+Against the real API + MySQL 8.4 + Redis with a seeded throwaway organization (pages in every account state, three groups, a campaign): overview numbers matched the data (7 pages, 1 ready, 1 reconnect, 1 disconnected, creator account excluded from "unused"); pages list and filters; page details with inheritance (formats from the category, aspect ratio from the page); identity editor saving a rule and the text checker returning both warnings; account mapping with live states and reasons; groups and group detail with statistics; categories; the campaign card. As a **viewer**: no create/edit/archive controls, internal notes and provider profile hidden. **Found and fixed:** wide tables stretched the whole page (content container lacked `min-w-0`). **Found while doing it:** the campaign "Performance" block errored on MySQL (TD-54) - fixed afterwards, see §6.
 
 ## 4. What is NOT verified
 
@@ -57,3 +57,21 @@ npx --yes pnpm@9.0.0 test                      # all unit tests
 npx --yes pnpm@9.0.0 test:integration          # api, then worker (MySQL + Redis)
 docker compose -f docker-compose.mysql-test.yml down -v
 ```
+
+## 6. Campaign analytics on MySQL (TD-54) - `analytics.integration.test.ts`
+
+The campaign Performance endpoint (and the content / sound / account endpoints and the dashboard, which share its "latest snapshot per target" rollup) answered HTTP 500 on MySQL because of PostgreSQL-only SQL. The fix is in place in the existing repositories (no second analytics layer). All 11 tests run the real express app on real MySQL 8.4; **against the original code 10 of them fail** with MySQL error 1064 (the 11th, content-list pagination, is unrelated to the SQL and is a guard that it still behaves).
+
+| Requested | Proof |
+|---|---|
+| Campaign performance, multiple posts | three posts; one grows 10 → 50 → 120 (inserted out of time order): only the latest snapshot of each target is summed; a never-synced target counts in `targetCount` but not `syncedCount` |
+| Multiple publishing destinations | one content on Instagram + TikTok + YouTube: campaign and content totals sum all three, each account endpoint sees only its own, unpublished targets are counted but not as published |
+| Multiple publication attempts | four attempts on one target (three failed, one succeeded) do not multiply views, likes or the post's place in the dashboard ranking |
+| Nullable relationships | NULL counters count as synced and add 0; a NULL *newest* snapshot does not fall back to an older one; a caption-less post is labelled "(no caption)"; content with no campaign / no sound stays out of a campaign's totals |
+| Empty campaigns | no content, content without targets, targets without snapshots, and a brand-new organization's dashboard all answer 200 with zeros / empty lists |
+| Campaign filtering | two campaigns, a sound and an account are separate; another organization's campaign or account is 404 and its numbers never appear; 401 without a session |
+| Pagination and ordering | top content / top sounds: ranked by views, at most 5, newest snapshot only, ties broken by id and identical across calls, results are JSON numbers (MySQL returns `BIGINT`/`DECIMAL`); the campaign content list still pages newest-first with no duplicates or gaps; two snapshots in the same millisecond resolve to the greater id, repeatably; 1,205 targets (more than one query chunk) are neither double-counted nor dropped |
+
+Live check from a real server process (throwaway database): `/api/analytics/campaigns/:id`, an empty campaign, an account, `/api/dashboard`, `/api/page-network/*` and `/api/publishing/overview` all answered 200, the campaign showed 600 views / 12 likes / 6 comments / 3 shares from the latest snapshots only, and the campaign screen rendered its Performance block with every request 200.
+
+**Not covered:** the same MySQL sweep found one more PostgreSQL-only statement in the worker (native-OAuth token refresh, TD-59). It is outside analytics and was not changed.

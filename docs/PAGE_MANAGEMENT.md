@@ -72,4 +72,3 @@ A campaign's pages = those assigned directly + the members of its assigned group
 | "The category … is archived" | restore it or choose another |
 | "This page is archived" on edit | restore it first |
 | A group preference seems ignored | group preferences apply only when a group is chosen (preview/check); the page's own values always win |
-| Campaign *Performance* shows an error | known, unrelated to the Page Network: TD-54 (analytics query not yet ported to MySQL) |
