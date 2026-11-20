@@ -51,14 +51,19 @@ export async function makeThumbnail(ffmpegPath: string, ffprobePath: string, sou
   const filter = `scale=${side}:${side}:force_original_aspect_ratio=decrease`;
   const seekMs = options.kind === "video" ? (options.atMs ?? Math.min(1000, Math.floor((options.durationMs ?? 0) * 0.1))) : 0;
   const args = ["-y", "-v", "error", ...(seekMs > 0 ? ["-ss", (seekMs / 1000).toFixed(3)] : []), "-i", sourcePath, "-frames:v", "1", "-vf", filter, "-q:v", "4", "-update", "1", outputPath];
+  const fromStart = args.filter((_, i, a) => !(a[i] === "-ss" || a[i - 1] === "-ss"));
+  // A seek past the end of a very short clip produces no frame: FFmpeg 5 exits 0 without writing a file, newer versions
+  // exit with an error. Either way, retry from the start before giving up.
+  const wroteFrame = async () => (await stat(outputPath).catch(() => null))?.size ?? 0;
   try {
     await runFfmpegOnce(ffmpegPath, args);
+    if (seekMs > 0 && (await wroteFrame()) === 0) await runFfmpegOnce(ffmpegPath, fromStart);
   } catch (err) {
-    // a seek past the end of a very short clip produces no frame: retry from the start before giving up
-    if (seekMs > 0) await runFfmpegOnce(ffmpegPath, args.filter((_, i, a) => !(a[i] === "-ss" || a[i - 1] === "-ss")));
+    if (seekMs > 0) await runFfmpegOnce(ffmpegPath, fromStart);
     else throw err;
   }
-  const { size } = await stat(outputPath);
+  const size = await wroteFrame();
+  if (size === 0) throw new FfmpegCommandError("FFmpeg produced no frame for this file.", "");
   const facts = await probeMedia(ffprobePath, outputPath).catch(() => null);
   return { width: facts?.width ?? null, height: facts?.height ?? null, sizeBytes: size };
 }

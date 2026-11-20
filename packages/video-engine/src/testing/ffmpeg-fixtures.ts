@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
@@ -27,6 +27,22 @@ export const runRealFfmpegTests = FFMPEG_AVAILABLE || process.env.CI === "true";
 
 function ff(args: string[]): void {
   execFileSync(FFMPEG, ["-y", "-v", "error", ...args], { timeout: 120_000 });
+}
+
+/**
+ * Copies an MP4 and writes a 90-degree display matrix into its first track header (tkhd), which is exactly how a phone
+ * marks a portrait clip. Done on the bytes because FFmpeg's `-display_rotation` option only exists from version 6, and
+ * the worker image (Debian 12) ships 5.1.
+ */
+function copyWithDisplayRotation(source: string, target: string): void {
+  const bytes = readFileSync(source);
+  const at = bytes.indexOf("tkhd");
+  if (at < 0) throw new Error("fixture: no tkhd box in the sample video");
+  const version = bytes[at + 4];
+  const matrix = at + 4 + (version === 1 ? 52 : 40);
+  const fixed = [0, 0xffff0000, 0, 0x00010000, 0, 0, 0, 0, 0x40000000]; // a b u c d v x y w (16.16 / 2.30 fixed point)
+  fixed.forEach((value, i) => bytes.writeUInt32BE(value, matrix + i * 4));
+  writeFileSync(target, bytes);
 }
 
 export interface SampleMedia {
@@ -65,7 +81,7 @@ export function makeSampleMedia(dir: string): SampleMedia {
   };
   ff(["-f", "lavfi", "-i", "testsrc=size=640x360:rate=25", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", m.video]);
   ff(["-f", "lavfi", "-i", "testsrc=size=1080x1920:rate=25", "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", m.verticalVideo]);
-  ff(["-display_rotation:v", "90", "-i", m.video, "-c", "copy", m.rotatedVideo]);
+  copyWithDisplayRotation(m.video, m.rotatedVideo);
   ff(["-f", "lavfi", "-i", "testsrc=size=800x600", "-frames:v", "1", m.png]);
   ff(["-f", "lavfi", "-i", "testsrc2=size=1000x1000", "-frames:v", "1", "-q:v", "3", m.jpeg]);
   ff(["-f", "lavfi", "-i", "sine=frequency=330:sample_rate=22050", "-t", "3", "-ac", "1", m.wav]);
