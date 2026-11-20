@@ -4,7 +4,12 @@ import { EDITORIAL_FORMATS, resolveEditorialIdentity, type ResolvedIdentity } fr
 import {
   RECIPE_PRESETS,
   checkRecipeCompatibility,
+  buildTimeline,
   computeLayout,
+  decideOutput,
+  planSubtitles,
+  planText,
+  textRenderProblem,
   emptyRecipeConfig,
   hasBlockingIssue,
   parseRecipeConfig,
@@ -28,6 +33,9 @@ import { assetDto, ASSET_INCLUDE, conflict, notFound } from "./media-common.js";
 import { PAGE_INCLUDE, groupLayer, resolveForPage } from "./page-network-common.js";
 import { requireAdmin } from "./text-library.service.js";
 import { TEXT_INCLUDE } from "./text-common.js";
+
+/** Shown in the preview when no text is chosen. */
+export const PLACEHOLDER_TEXT = "Your text appears here";
 
 const bad = (message: string, details?: unknown) => new ApiHttpError(400, ERROR_CODES.INVALID_REQUEST, message, details);
 const audit = (actor: SafeUser, action: Parameters<typeof createAuditLog>[0]["action"], targetId: string | undefined, metadata?: Record<string, unknown>) =>
@@ -501,11 +509,35 @@ export async function evaluate(actor: SafeUser, input: EffectiveInput) {
   }
 
   const issues = checkRecipeCompatibility({ recipe: { ...scope, config, formatId, requiredTextCategoryId }, effective, asset: compatAsset, text: compatText, target, purpose: input.purpose });
+
+  // the plan the renderer will follow, computed here from the same shared functions, so the preview and the render cannot differ
+  const values = effective.values;
+  const placeholder = !compatText;
+  const planLanguage = compatText?.language ?? target?.identity?.language ?? null;
+  const plan = planText({ text: compatText?.body ?? PLACEHOLDER_TEXT, language: planLanguage, values });
+  if (compatText) {
+    const problem = textRenderProblem(plan);
+    if (problem) issues.push({ code: `RENDER_${problem.code}`, severity: "ERROR", field: "caption", message: `${problem.message} ${problem.remedy}` });
+  }
+  let output: { kind: "VIDEO" | "IMAGE"; durationMs: number } | null = null;
+  if (compatAsset && (compatAsset.kind === "IMAGE" || compatAsset.kind === "VIDEO")) {
+    const decision = decideOutput(values, { kind: compatAsset.kind, durationMs: compatAsset.durationMs });
+    if (decision.ok) output = { kind: decision.outputKind, durationMs: decision.durationMs };
+    else issues.push({ code: "RENDER_SOURCE_UNUSABLE", severity: "ERROR", field: "media", message: `${decision.message} ${decision.remedy}` });
+  }
+  const timelineMs = output?.durationMs ?? Math.round(values.durationSeconds * 1000);
+  const timeline = buildTimeline(values, plan, timelineMs, { still: output?.kind === "IMAGE" });
+  const subtitles = output?.kind === "IMAGE" ? { enabled: false, fontSizePx: 0, stepPx: 0, cues: [] } : planSubtitles({ text: compatText?.body ?? PLACEHOLDER_TEXT, language: planLanguage, values, plan, durationMs: timelineMs });
   return {
     recipe: recipeInfo,
     target: targetInfo,
     effective: { values: effective.values, sources: effective.sources, warnings: effective.warnings },
     layout: computeLayout(effective.values),
+    plan,
+    timeline,
+    subtitles,
+    output,
+    placeholder,
     issues,
     blocking: hasBlockingIssue(issues),
     asset: assetOut,

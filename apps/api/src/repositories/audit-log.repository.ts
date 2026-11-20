@@ -114,7 +114,11 @@ export type AuditAction =
   | "RECIPE_RESTORED"
   | "RECIPE_ASSIGNMENT_CHANGED"
   | "RECIPE_PRESETS_INSTALLED"
-  | "RECIPE_PREVIEW_SAVED";
+  | "RECIPE_PREVIEW_SAVED"
+  // Phase 5C: rendering
+  | "RENDER_REQUESTED"
+  | "RENDER_CANCEL_REQUESTED"
+  | "RENDER_RETRIED";
 
 interface CreateAuditLogInput {
   organizationId: string;

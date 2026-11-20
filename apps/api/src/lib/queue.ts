@@ -11,6 +11,8 @@ import {
   type AnalyticsSyncJobData,
   type MediaProcessingJobData,
   mediaProcessingJobId,
+  type MediaRenderJobData,
+  mediaRenderJobId,
 } from "@socialith/types";
 import { logger } from "../logger.js";
 
@@ -51,6 +53,7 @@ const publishingQueue = connection ? new Queue<PublishingJobData>(QUEUE_NAMES.PU
 const analyticsSyncQueue = connection
   ? new Queue<AnalyticsSyncJobData>(QUEUE_NAMES.ANALYTICS_SYNC, { connection })
   : undefined;
+const mediaRenderQueue = connection ? new Queue<MediaRenderJobData>(QUEUE_NAMES.MEDIA_RENDER, { connection }) : undefined;
 const mediaProcessingQueue = connection ? new Queue<MediaProcessingJobData>(QUEUE_NAMES.MEDIA_PROCESSING, { connection }) : undefined;
 
 /** Deterministic per-content job ID (shared with the worker's reconciler via @socialith/types) — enqueuing again for the same content
@@ -152,6 +155,29 @@ export async function enqueueMediaProcessing(data: MediaProcessingJobData): Prom
     removeOnFail: { age: 7 * 24 * 3600 },
   });
 }
+/**
+ * Enqueues one render. The job id is derived from the render job id, so enqueuing the same render twice is a no-op. Two
+ * attempts only (a render is expensive and a failed one is retried by the person, not silently in a loop). Like the other
+ * media producers this throws without Redis instead of pretending the work was queued.
+ */
+export async function enqueueMediaRender(data: MediaRenderJobData): Promise<void> {
+  if (!mediaRenderQueue) throw new QueueUnavailableError();
+  await mediaRenderQueue.add(QUEUE_NAMES.MEDIA_RENDER, data, {
+    jobId: mediaRenderJobId(data.renderJobId),
+    attempts: 2,
+    backoff: { type: "exponential", delay: 10_000 },
+    removeOnComplete: { age: 24 * 3600, count: 1000 },
+    removeOnFail: { age: 7 * 24 * 3600 },
+  });
+}
+
+/** Takes a render that has not started out of the queue (a cancel); a render that is already running is stopped by the worker itself. */
+export async function removeQueuedMediaRender(renderJobId: string): Promise<void> {
+  if (!mediaRenderQueue) return;
+  const job = await mediaRenderQueue.getJob(mediaRenderJobId(renderJobId));
+  if (job && (await job.isWaiting().catch(() => false))) await job.remove().catch(() => undefined);
+}
+
 export interface QueueHealthEntry {
   name: string;
   waiting: number;
@@ -170,7 +196,7 @@ export interface QueueHealthEntry {
  * already confirmed Redis is reachable.
  */
 export async function getQueueHealth(): Promise<QueueHealthEntry[]> {
-  const queues = [contentSchedulingQueue, contentGenerationQueue, videoRenderQueue, publishingQueue, analyticsSyncQueue, mediaProcessingQueue].filter(
+  const queues = [contentSchedulingQueue, contentGenerationQueue, videoRenderQueue, publishingQueue, analyticsSyncQueue, mediaProcessingQueue, mediaRenderQueue].filter(
     (q): q is NonNullable<typeof q> => q !== undefined,
   );
   return Promise.all(
