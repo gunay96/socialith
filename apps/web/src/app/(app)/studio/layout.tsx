@@ -8,6 +8,8 @@ const TABS = [
   { href: "/studio", label: "Media Library", exact: true },
   { href: "/studio/upload", label: "Upload" },
   { href: "/studio/queue", label: "Processing Queue" },
+  { href: "/studio/texts", label: "Text Library" },
+  { href: "/studio/recipes", label: "Recipes" },
 ];
 
 export default function StudioLayout({ children }: { children: React.ReactNode }) {
