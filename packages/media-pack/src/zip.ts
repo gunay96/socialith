@@ -68,7 +68,7 @@ export interface ZipScan {
   totalDeclaredBytes: number;
 }
 
-function openZip(path: string): Promise<yauzl.ZipFile> {
+export function openZip(path: string): Promise<yauzl.ZipFile> {
   return new Promise((resolve, reject) => {
     yauzl.open(path, { lazyEntries: true, autoClose: false, validateEntrySizes: true, decodeStrings: true, strictFileNames: false }, (err, zip) => {
       if (err || !zip) reject(new ZipLimitError("ZIP_INVALID", `This is not a readable ZIP archive (${err?.message ?? "unknown error"}).`));
@@ -77,7 +77,7 @@ function openZip(path: string): Promise<yauzl.ZipFile> {
   });
 }
 
-function nextEntry(zip: yauzl.ZipFile): Promise<yauzl.Entry | null> {
+export function nextEntry(zip: yauzl.ZipFile): Promise<yauzl.Entry | null> {
   return new Promise((resolve, reject) => {
     const cleanup = () => {
       zip.removeListener("entry", onEntry);

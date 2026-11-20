@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    // At build time @socialith/publishing resolves through its package.json (turbo builds it first).
+    "paths": {}
+  },
+  "include": ["src"]
+}

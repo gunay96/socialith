@@ -30,6 +30,18 @@ export function looksLikeText(head: Buffer): boolean {
   return false;
 }
 
+/**
+ * Text in a legacy single-byte encoding (Windows-1254 "Turkish ANSI", Windows-1252 ...): no NUL bytes, almost no control
+ * characters, but not valid UTF-8. Excel and Notepad on older systems save "CSV" and "TXT" this way. Only the text
+ * import accepts it (it decodes it explicitly and says which encoding it used); the media library does not.
+ */
+export function looksLikeLegacyText(head: Buffer): boolean {
+  if (head.length === 0 || head.includes(0x00)) return false;
+  let control = 0;
+  for (const byte of head) if (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d && byte !== 0x0c) control++;
+  return control / head.length <= 0.01;
+}
+
 /** The signature the first bytes show, or null when they match none of the types the library accepts. */
 export function detectSignature(head: Buffer): SignatureKind | null {
   if (head.length >= 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return "jpeg";
