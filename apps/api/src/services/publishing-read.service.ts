@@ -4,7 +4,7 @@ import { ERROR_CODES } from "@socialith/types";
 import { PUBLICATION_STATES, validateDestination, zonedDayKey, zonedDayRange, type PlatformKey, type PublicationState } from "@socialith/publishing";
 import { ApiHttpError } from "../middleware/error-handler.js";
 import type { SafeUser } from "../types/auth.js";
-import { PUBLICATION_INCLUDE, getEffectiveSettings, stateOf, toPublicationDto, effectiveTextOf, isProviderOwned } from "./publishing-common.js";
+import { PUBLICATION_INCLUDE, destinationFactsOf, getEffectiveSettings, stateOf, toPublicationDto, effectiveTextOf, isProviderOwned } from "./publishing-common.js";
 import { assetFacts, validatePublicationTarget } from "./publishing-validation.service.js";
 
 // ------------------------------------------------------------------------------------------------ filters
@@ -64,6 +64,20 @@ export function stateWhere(state: PublicationState): Prisma.ContentTargetWhereIn
   }
 }
 
+/**
+ * "This destination belongs to page P": the page it is directly linked to (Page Network, Phase 4) - or, when it has no
+ * direct link, the page its Upload-Post profile was mapped to in Phase 2. A direct link always wins, so a destination is
+ * never reported under two pages.
+ */
+export function pageOfDestination(pageId: string): Prisma.SocialAccountWhereInput {
+  return {
+    OR: [
+      { managedPage: { is: { id: pageId } } },
+      { managedPage: null, uploadPostAccount: { is: { profile: { managedPageId: pageId } } } },
+    ],
+  };
+}
+
 export function filterWhere(organizationId: string, f: PublicationFilters): Prisma.ContentTargetWhereInput {
   const and: Prisma.ContentTargetWhereInput[] = [{ content: { organizationId } }];
   if (f.platform) and.push({ socialAccount: { platform: f.platform } });
@@ -71,7 +85,7 @@ export function filterWhere(organizationId: string, f: PublicationFilters): Pris
   if (f.contentId) and.push({ contentId: f.contentId });
   if (f.destinationId) and.push({ socialAccountId: f.destinationId });
   if (f.creatorId) and.push({ socialAccount: { uploadPostAccount: { is: { creatorId: f.creatorId } } } });
-  if (f.managedPageId) and.push({ socialAccount: { uploadPostAccount: { is: { profile: { managedPageId: f.managedPageId } } } } });
+  if (f.managedPageId) and.push({ socialAccount: pageOfDestination(f.managedPageId) });
   if (f.artist) and.push({ content: { sound: { is: { artist: { contains: f.artist } } } } });
   if (f.search) and.push({ OR: [{ socialAccount: { handle: { contains: f.search } } }, { socialAccount: { displayName: { contains: f.search } } }, { content: { caption: { contains: f.search } } }, { captionOverride: { contains: f.search } }] });
   if (f.from || f.to) and.push({ [f.dateField ?? "scheduledAt"]: { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lt: f.to } : {}) } });
@@ -233,11 +247,11 @@ export async function listDestinations(
     ...(q.provider ? { publishingProvider: q.provider } : {}),
     ...(q.search ? { OR: [{ handle: { contains: q.search } }, { displayName: { contains: q.search } }] } : {}),
     ...(q.creatorId ? { uploadPostAccount: { is: { creatorId: q.creatorId } } } : {}),
-    ...(q.managedPageId ? { uploadPostAccount: { is: { profile: { managedPageId: q.managedPageId } } } } : {}),
+    ...(q.managedPageId ? pageOfDestination(q.managedPageId) : {}),
   };
   const accounts = await prisma.socialAccount.findMany({
     where,
-    include: { uploadPostAccount: { include: { creator: { select: { id: true, name: true } }, profile: { include: { managedPage: { select: { id: true, name: true } } } } } } },
+    include: { managedPage: { select: { id: true, name: true } }, uploadPostAccount: { include: { creator: { select: { id: true, name: true } }, profile: { include: { managedPage: { select: { id: true, name: true } } } } } } },
     orderBy: [{ platform: "asc" }, { handle: "asc" }, { id: "asc" }],
   });
 
@@ -253,20 +267,7 @@ export async function listDestinations(
 
   const rows = accounts.map((a) => {
     const up = a.uploadPostAccount;
-    const meta = a.providerMetadata;
-    const issues = validateDestination(
-      {
-        platform: a.platform as PlatformKey,
-        handle: a.handle,
-        accountStatus: a.status,
-        isDemo: typeof meta === "object" && meta !== null && !Array.isArray(meta) && (meta as Record<string, unknown>).seed === true,
-        provider: a.publishingProvider,
-        uploadPost: up
-          ? { accountStatus: up.status, accountPlatform: up.platform, capabilities: Array.isArray(up.capabilities) ? up.capabilities.filter((c): c is string => typeof c === "string") : [], profileStatus: up.profile.status, profileBlocked: up.profile.blocked, identityUnchanged: up.providerAccountId === a.externalAccountId }
-          : null,
-      },
-      a.platform as PlatformKey,
-    );
+    const issues = validateDestination(destinationFactsOf(a), a.platform as PlatformKey);
     const capabilities = up && Array.isArray(up.capabilities) ? up.capabilities.filter((c): c is string => typeof c === "string") : [];
     const todayCount = usageOf.get(a.id) ?? 0;
     return {
@@ -278,7 +279,7 @@ export async function listDestinations(
       provider: a.publishingProvider,
       profile: up ? { id: up.profile.id, username: up.profile.username } : null,
       creator: up?.creator ?? null,
-      managedPage: up?.profile.managedPage ?? null,
+      managedPage: a.managedPage ?? up?.profile.managedPage ?? null,
       ready: issues.length === 0,
       problems: issues.map((i) => ({ code: i.code, message: i.message })),
       supports: { music: a.platform === "TIKTOK" && a.publishingProvider === "UPLOAD_POST" && capabilities.includes("music"), images: a.platform !== "YOUTUBE", video: true },

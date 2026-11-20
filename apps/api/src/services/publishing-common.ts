@@ -10,6 +10,7 @@ import {
   effectiveText,
   schedulingOwner,
   STATE_LABELS,
+  type DestinationFacts,
   type PublicationState,
 } from "@socialith/publishing";
 import { enqueueContentScheduling, removeContentSchedulingJob } from "../lib/queue.js";
@@ -26,6 +27,8 @@ export const PUBLICATION_INCLUDE = {
   },
   socialAccount: {
     include: {
+      // Phase 4: the page this destination is directly authorized for (wins over the Phase 2 profile mapping below).
+      managedPage: { select: { id: true, name: true } },
       uploadPostAccount: {
         include: {
           creator: { select: { id: true, name: true } },
@@ -38,6 +41,35 @@ export const PUBLICATION_INCLUDE = {
 } satisfies Prisma.ContentTargetInclude;
 
 export type Publication = Prisma.ContentTargetGetPayload<{ include: typeof PUBLICATION_INCLUDE }>;
+
+/** A destination (SocialAccount) with the provider rows its readiness depends on. */
+export type DestinationRow = Prisma.SocialAccountGetPayload<{ include: { uploadPostAccount: { include: { profile: true } } } }>;
+
+/**
+ * The facts the platform/provider checks need about a destination. One definition for the Publishing Center's
+ * validation and for the Page Network's account mapping, so both always agree on what "ready" means.
+ */
+export function destinationFactsOf(s: DestinationRow): DestinationFacts {
+  const up = s.uploadPostAccount;
+  const meta = s.providerMetadata;
+  return {
+    platform: s.platform,
+    handle: s.handle,
+    accountStatus: s.status,
+    isDemo: typeof meta === "object" && meta !== null && !Array.isArray(meta) && (meta as Record<string, unknown>).seed === true,
+    provider: s.publishingProvider,
+    uploadPost: up
+      ? {
+          accountStatus: up.status,
+          accountPlatform: up.platform,
+          capabilities: Array.isArray(up.capabilities) ? up.capabilities.filter((c): c is string => typeof c === "string") : [],
+          profileStatus: up.profile.status,
+          profileBlocked: up.profile.blocked,
+          identityUnchanged: up.providerAccountId === s.externalAccountId,
+        }
+      : null,
+  };
+}
 
 // ---------------------------------------------------------------------------------------------- settings
 
@@ -156,7 +188,7 @@ export function toPublicationDto(t: Publication, approvalRequired: boolean) {
       provider: t.socialAccount.publishingProvider,
       profile: up ? { id: up.profile.id, username: up.profile.username } : null,
       creator: up?.creator ?? null,
-      managedPage: up?.profile.managedPage ?? null,
+      managedPage: t.socialAccount.managedPage ?? up?.profile.managedPage ?? null,
     },
     state,
     stateLabel: STATE_LABELS[state],
