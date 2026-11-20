@@ -76,6 +76,19 @@ export async function enqueueContentScheduling(contentId: string, scheduledAt: D
 }
 
 /**
+ * Removes the content's pending scheduling job (when no target of it is scheduled any more). A job that is running
+ * right now is left alone: the worker's processor re-reads the database and finds nothing due.
+ */
+export async function removeContentSchedulingJob(contentId: string): Promise<void> {
+  if (!contentSchedulingQueue) return;
+  try {
+    await contentSchedulingQueue.remove(jobIdFor(contentId));
+  } catch {
+    // locked (running): see above
+  }
+}
+
+/**
  * Real retry/backoff for the Phase 07 pipeline: transient failures (a
  * flaky AI provider response, a momentary FFmpeg hiccup) get retried a
  * few times with exponential backoff before the job is left failed;

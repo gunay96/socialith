@@ -112,7 +112,24 @@ describe("parseEnv — Upload-Post (Phase 2)", () => {
     expect(env.UPLOAD_POST_PUBLISH_TIMEOUT_MS).toBe(60_000);
     expect(env.UPLOAD_POST_SYNC_INTERVAL_MINUTES).toBe(30);
     expect(env.UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED).toBe(false);
+    expect(env.UPLOAD_POST_HANDOFF_OWNER_APPROVED).toBe(false);
     expect(env.UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS).toBe(48);
+  });
+
+  it("provider-side scheduling cannot be switched on by one variable: it also needs the owner-approval confirmation", () => {
+    // enabled without the confirmation: refuses to boot, naming the variable and saying why
+    const refused = issuesOf({ ...BASE, UPLOAD_POST_API_KEY: "a-real-looking-key-123", UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED: "true" });
+    expect(refused.map((i) => i.path)).toContain("UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED");
+    expect(JSON.stringify(refused)).toMatch(/UPLOAD_POST_HANDOFF_OWNER_APPROVED/);
+    expect(JSON.stringify(refused)).toMatch(/separate live verification/);
+    // the confirmation alone does not enable anything
+    const alone = parseEnv({ ...BASE, UPLOAD_POST_HANDOFF_OWNER_APPROVED: "true" });
+    expect(alone.UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED).toBe(false);
+    // both together: allowed
+    const both = parseEnv({ ...BASE, UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED: "true", UPLOAD_POST_HANDOFF_OWNER_APPROVED: "true" });
+    expect(both.UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED).toBe(true);
+    // explicit false/false and the empty strings of an unset .env line are the safe default
+    expect(parseEnv({ ...BASE, UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED: "", UPLOAD_POST_HANDOFF_OWNER_APPROVED: "" }).UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED).toBe(false);
   });
 
   it("parses the key, the hand-off switch and numeric settings", () => {
@@ -120,6 +137,7 @@ describe("parseEnv — Upload-Post (Phase 2)", () => {
       ...BASE,
       UPLOAD_POST_API_KEY: "a-real-looking-key-123",
       UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED: "true",
+      UPLOAD_POST_HANDOFF_OWNER_APPROVED: "true", // the deliberate second switch (see the next tests)
       UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS: "24",
       UPLOAD_POST_SYNC_INTERVAL_MINUTES: "60",
     });

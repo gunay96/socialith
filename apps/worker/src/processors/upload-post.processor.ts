@@ -1,3 +1,4 @@
+import { effectiveText } from "@socialith/publishing";
 import { prisma } from "@socialith/database";
 import { loadEnv, type Env } from "@socialith/config";
 import { INTEGRATION_ORGANIZATION_MESSAGES, resolveIntegrationOrganization, UploadPostError } from "@socialith/upload-post";
@@ -43,7 +44,9 @@ async function resolveMaterial(env: Env, targetId: string): Promise<SweepMateria
   const variation = target.content.variations.find((v) => v.platform === platform) ?? null;
   const relevant = [...target.content.assets.filter((a) => a.platform === platform), ...target.content.assets.filter((a) => a.platform === null)];
   const assets = await Promise.all(relevant.map(async (a) => ({ type: a.type, url: await resolveAssetUrl(env, a) })));
-  return { caption: variation?.caption ?? target.content.caption, title: variation?.title ?? null, assets, durable: assetUrlsAreDurable(env) };
+  // same rule as the publish path and the approval payload: the destination's own text wins
+  const text = effectiveText({ captionOverride: target.captionOverride, titleOverride: target.titleOverride, variationCaption: variation?.caption ?? null, variationTitle: variation?.title ?? null, contentCaption: target.content.caption });
+  return { caption: text.caption, title: text.title, assets, durable: assetUrlsAreDurable(env) };
 }
 
 /** Processor for QUEUE_NAMES.UPLOAD_POST: sync, sweep and webhook-triggered reconcile jobs. A missing API key is "not configured", never an error loop. */

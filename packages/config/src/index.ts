@@ -196,6 +196,12 @@ const envSchema = z
     )
       .default("false")
       .transform((v) => v === "true"),
+    // Product decision: provider-side scheduling may only be enabled after a SEPARATE live verification and the
+    // owner's explicit approval. Turning the hand-off on therefore needs this second, deliberate switch as well;
+    // setting only UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED=true refuses to boot (see superRefine below).
+    UPLOAD_POST_HANDOFF_OWNER_APPROVED: emptyStringAsUndefined(z.enum(["true", "false"]).optional())
+      .default("false")
+      .transform((v) => v === "true"),
     UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS: z.coerce.number().int().min(1).max(168).default(48),
   })
   .superRefine((env, ctx) => {
@@ -215,6 +221,15 @@ const envSchema = z
           message: "UPLOAD_POST_BASE_URL must use https (plain http is only accepted for a loopback test server).",
         });
       }
+    }
+
+    if (env.UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED && !env.UPLOAD_POST_HANDOFF_OWNER_APPROVED) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED"],
+        message:
+          "Provider-side scheduling (Upload-Post hand-off) is OFF by default and may only be enabled after separate live verification and the owner's explicit approval: also set UPLOAD_POST_HANDOFF_OWNER_APPROVED=true to confirm both.",
+      });
     }
 
     if (env.NODE_ENV !== "production") return;

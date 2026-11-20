@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@socialith/database";
+import { buildTargetPayload } from "@socialith/publishing";
 import { UploadPostClient, defaultProfiles, startMockUploadPostServer, type MockUploadPostHandle } from "@socialith/upload-post";
 
 vi.mock("../publishing/enqueue.js", () => ({
@@ -36,8 +37,20 @@ const durable: SweepMaterial = { caption: "Scheduled caption", title: null, asse
 const sweep = (over: Partial<Parameters<typeof sweepUploadPost>[0]> = {}) =>
   sweepUploadPost({ db: prisma, client, config: CONFIG, resolveMaterial: async () => durable, log: silent, ...over });
 
+/**
+ * A real reschedule (Publishing Center, or the content API) moves the content's time AND its scheduled targets'
+ * times, because since Phase 3 each target carries its own authoritative time. The tests below simulate time
+ * passing / the operator rescheduling the same way. (Before Phase 3 only the content's time existed.)
+ */
+async function moveSchedule(contentId: string, at: Date): Promise<void> {
+  await prisma.content.update({ where: { id: contentId }, data: { scheduledAt: at } });
+  await prisma.contentTarget.updateMany({ where: { contentId, status: "SCHEDULED" }, data: { scheduledAt: at } });
+}
 async function setup(scheduledInMs: number, platform: "tiktok" | "instagram" = "tiktok") {
   const org = await prisma.organization.create({ data: { name: "IT SW", slug: `it-sw-${randomUUID().slice(0, 8)}` } });
+  // These tests exercise scheduling MECHANICS, not approval. Approval is required by default (product decision), so each
+  // organization here explicitly saves the opt-out; approval itself is covered in publishing-center.integration.test.ts.
+  await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval: false } });
   await syncUploadPostProfiles({ db: prisma, client, log: silent }, org.id, "MANUAL");
   const profile = await prisma.uploadPostProfile.findUniqueOrThrow({ where: { organizationId_username: { organizationId: org.id, username: "acme_music" } } });
   const acc = await prisma.uploadPostConnectedAccount.findUniqueOrThrow({ where: { profileId_platform: { profileId: profile.id, platform } } });
@@ -120,12 +133,12 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
     it("does nothing when hand-off is disabled, outside the window, too close to the due time, or for native destinations", async () => {
       const off = await setup(3 * HOUR);
       expect((await sweep({ config: { ...CONFIG, handoffEnabled: false } })).handedOff).toBe(0);
-      await prisma.content.update({ where: { id: off.content.id }, data: { scheduledAt: new Date(Date.now() + 5 * 24 * HOUR) } });
+      await moveSchedule(off.content.id, new Date(Date.now() + 5 * 24 * HOUR));
       expect((await sweep()).handedOff).toBe(0); // beyond the 48 h window
-      await prisma.content.update({ where: { id: off.content.id }, data: { scheduledAt: new Date(Date.now() + 5 * MIN) } });
+      await moveSchedule(off.content.id, new Date(Date.now() + 5 * MIN));
       expect((await sweep()).handedOff).toBe(0); // inside the 10-minute minimum lead
       await prisma.socialAccount.update({ where: { id: off.social.id }, data: { publishingProvider: "NATIVE" } });
-      await prisma.content.update({ where: { id: off.content.id }, data: { scheduledAt: new Date(Date.now() + 3 * HOUR) } });
+      await moveSchedule(off.content.id, new Date(Date.now() + 3 * HOUR));
       expect((await sweep()).handedOff).toBe(0);
       expect(mock.state.jobs.size).toBe(0);
       expect(await prisma.uploadPostPublication.count({ where: { contentTargetId: off.target.id } })).toBe(0);
@@ -153,7 +166,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
       expect((await pub(target.id)).status).toBe("FAILED");
       expect(mock.state.jobs.size).toBe(0);
       // Socialith's own job now fires it:
-      await prisma.content.update({ where: { id: (await tgt(target.id)).contentId }, data: { scheduledAt: new Date(Date.now() - 1000) } });
+      await moveSchedule((await tgt(target.id)).contentId, new Date(Date.now() - 1000));
       await processContentScheduling({ data: { contentId: (await tgt(target.id)).contentId } } as never);
       expect((await tgt(target.id)).status).toBe("PUBLISHING");
       expect(enqueuePublishingJob).toHaveBeenCalledWith(target.id);
@@ -194,7 +207,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
     it("the Socialith scheduling job does NOT fire a provider-owned target", async () => {
       const { target, content } = await setup(3 * HOUR);
       await sweep();
-      await prisma.content.update({ where: { id: content.id }, data: { scheduledAt: new Date(Date.now() - 1000) } }); // Socialith's job fires at the due time
+      await moveSchedule(content.id, new Date(Date.now() - 1000)); // Socialith's job fires at the due time
       await processContentScheduling({ data: { contentId: content.id } } as never);
       expect((await tgt(target.id)).status).toBe("SCHEDULED");
       expect((await cnt(content.id)).status).toBe("SCHEDULED");
@@ -206,7 +219,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
       await sweep();
       const native = await prisma.socialAccount.create({ data: { organizationId: org.id, platform: "INSTAGRAM", externalAccountId: "n1", handle: "n", displayName: "n" } });
       const other = await prisma.contentTarget.create({ data: { contentId: content.id, socialAccountId: native.id, status: "SCHEDULED" } });
-      await prisma.content.update({ where: { id: content.id }, data: { scheduledAt: new Date(Date.now() - 1000) } });
+      await moveSchedule(content.id, new Date(Date.now() - 1000));
       await processContentScheduling({ data: { contentId: content.id } } as never);
       expect((await tgt(other.id)).status).toBe("PUBLISHING");
       expect((await tgt(target.id)).status).toBe("SCHEDULED");
@@ -222,7 +235,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
       expect(summary.skippedProviderOwned).toBe(1);
       expect(port.calls).toEqual([]);
       // far past due and "stale": a Socialith-owned target would be held; the provider-owned one must not be
-      await prisma.content.update({ where: { id: content.id }, data: { scheduledAt: new Date(Date.now() - 5 * HOUR) } });
+      await moveSchedule(content.id, new Date(Date.now() - 5 * HOUR));
       summary = await reconcileScheduling({ db: prisma, port, config: reconcileConfig, log: silent });
       expect(summary).toMatchObject({ skippedProviderOwned: 1, heldStale: 0 });
       expect((await tgt(target.id)).status).toBe("SCHEDULED");
@@ -234,7 +247,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
       await sweep();
       const native = await prisma.socialAccount.create({ data: { organizationId: org.id, platform: "INSTAGRAM", externalAccountId: "n2", handle: "n", displayName: "n" } });
       const other = await prisma.contentTarget.create({ data: { contentId: content.id, socialAccountId: native.id, status: "SCHEDULED" } });
-      await prisma.content.update({ where: { id: content.id }, data: { scheduledAt: new Date(Date.now() - 5 * HOUR) } });
+      await moveSchedule(content.id, new Date(Date.now() - 5 * HOUR));
       const summary = await reconcileScheduling({ db: prisma, port: fakePort(), config: reconcileConfig, log: silent });
       expect(summary.heldStale).toBe(1);
       expect((await tgt(other.id)).status).toBe("FAILED");
@@ -252,13 +265,86 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
     });
   });
 
+  describe("Publishing Center: every target has its own time and its own approval", () => {
+    /** A second destination (another platform of the same Upload-Post profile) on the same organization and content. */
+    async function addTarget(base: Awaited<ReturnType<typeof setup>>, platform: "instagram" | "youtube", at: Date) {
+      const profile = await prisma.uploadPostProfile.findFirstOrThrow({ where: { organizationId: base.org.id, username: "acme_music" } });
+      const acc = await prisma.uploadPostConnectedAccount.findUniqueOrThrow({ where: { profileId_platform: { profileId: profile.id, platform } } });
+      const social = await prisma.socialAccount.create({ data: { organizationId: base.org.id, platform: platform.toUpperCase() as "INSTAGRAM", externalAccountId: acc.providerAccountId, handle: `h-${platform}`, displayName: "d", publishingProvider: "UPLOAD_POST" } });
+      await prisma.uploadPostConnectedAccount.update({ where: { id: acc.id }, data: { socialAccountId: social.id } });
+      return prisma.contentTarget.create({ data: { contentId: base.content.id, socialAccountId: social.id, status: "SCHEDULED", scheduledAt: at } });
+    }
+    const jobOf = async (targetId: string) => mock.state.jobs.get((await pub(targetId)).providerJobId!)!;
+
+    it("hands off by each target's OWN time: the one inside the window goes, the one far out stays with Socialith", async () => {
+      const base = await setup(3 * HOUR);
+      const far = await addTarget(base, "instagram", new Date(Date.now() + 5 * 24 * HOUR));
+      const s = await sweep();
+      expect(s.handedOff).toBe(1);
+      expect((await pub(base.target.id)).status).toBe("SCHEDULED_AT_PROVIDER");
+      expect(await prisma.uploadPostPublication.count({ where: { contentTargetId: far.id } })).toBe(0);
+    });
+
+    it("rescheduling ONE target edits only its provider job; the sibling's job is untouched", async () => {
+      const base = await setup(3 * HOUR);
+      const sibling = await addTarget(base, "instagram", new Date(Date.now() + 4 * HOUR));
+      await sweep();
+      const siblingJobBefore = JSON.stringify(await jobOf(sibling.id));
+      const newTime = new Date(Date.now() + 8 * HOUR);
+      await prisma.contentTarget.update({ where: { id: base.target.id }, data: { scheduledAt: newTime } });
+      const s = await sweep();
+      expect(s.driftRescheduled).toBe(1);
+      expect((await jobOf(base.target.id)).scheduledDate).toBe(newTime.toISOString());
+      expect(JSON.stringify(await jobOf(sibling.id))).toBe(siblingJobBefore);
+      expect(mock.state.jobs.size).toBe(2);
+    });
+
+    it("cancelling ONE target (parked as CANCELLED) cancels only its provider job", async () => {
+      const base = await setup(3 * HOUR);
+      const sibling = await addTarget(base, "instagram", new Date(Date.now() + 4 * HOUR));
+      await sweep();
+      await prisma.contentTarget.update({ where: { id: base.target.id }, data: { status: "PENDING", exception: "CANCELLED" } });
+      const s = await sweep();
+      expect(s.driftCancelled).toBe(1);
+      expect((await jobOf(base.target.id)).status).toBe("cancelled");
+      expect((await pub(base.target.id)).status).toBe("CANCELLED");
+      expect((await jobOf(sibling.id)).status).not.toBe("cancelled");
+      expect((await pub(sibling.id)).status).toBe("SCHEDULED_AT_PROVIDER");
+      expect((await tgt(sibling.id)).status).toBe("SCHEDULED");
+    });
+
+    it("never hands an unapproved publication to the provider's scheduler; approving it makes it eligible", async () => {
+      const { org, target } = await setup(3 * HOUR);
+      await prisma.publishingSettings.update({ where: { organizationId: org.id }, data: { requireApproval: true } });
+      expect((await sweep()).handedOff).toBe(0);
+      expect(await prisma.uploadPostPublication.count({ where: { contentTargetId: target.id } })).toBe(0);
+      expect(mock.state.jobs.size).toBe(0);
+
+      const t = await prisma.contentTarget.findUniqueOrThrow({ where: { id: target.id }, include: { socialAccount: { select: { platform: true } }, content: { include: { variations: true, assets: true } } } });
+      const payload = buildTargetPayload({ platform: t.socialAccount.platform, captionOverride: t.captionOverride, titleOverride: t.titleOverride, content: { caption: t.content.caption, soundId: t.content.soundId, variations: t.content.variations, assets: t.content.assets } });
+      await prisma.contentTarget.update({ where: { id: target.id }, data: { approvalStatus: "APPROVED", approvedPayload: payload } });
+      expect((await sweep()).handedOff).toBe(1);
+    });
+
+    it("a mandatory track that cannot be attached keeps the target with Socialith (no hand-off) so its own publish can fail it with the reason", async () => {
+      const { org, content, target } = await setup(3 * HOUR);
+      const sound = await prisma.sound.create({ data: { organizationId: org.id, title: "Neon Skyline", artist: "Wave Theory", platform: "TIKTOK" } });
+      await prisma.content.update({ where: { id: content.id }, data: { soundId: sound.id } });
+      await prisma.contentTarget.update({ where: { id: target.id }, data: { requireMusic: true } });
+      const s = await sweep();
+      expect(s.handedOff).toBe(0);
+      expect(s.handoffSkipped).toBe(1);
+      expect(await pub(target.id)).toMatchObject({ status: "CANCELLED", lastErrorKind: "HANDOFF_RELEASED" });
+      expect(mock.state.jobs.size).toBe(0);
+    });
+  });
   describe("drift: Socialith stays the master", () => {
     it("rescheduling in Socialith edits the provider job (no second job)", async () => {
       const { target, content } = await setup(3 * HOUR);
       await sweep();
       const jobId = (await pub(target.id)).providerJobId!;
       const newTime = new Date(Date.now() + 5 * HOUR);
-      await prisma.content.update({ where: { id: content.id }, data: { scheduledAt: newTime } });
+      await moveSchedule(content.id, newTime);
       const s = await sweep();
       expect(s.driftRescheduled).toBe(1);
       expect(mock.state.jobs.get(jobId)!.scheduledDate).toBe(newTime.toISOString());
@@ -281,7 +367,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
       const { target, content } = await setup(3 * HOUR);
       await sweep();
       const jobId = (await pub(target.id)).providerJobId!;
-      await prisma.content.update({ where: { id: content.id }, data: { scheduledAt: new Date(Date.now() + 10 * 24 * HOUR) } });
+      await moveSchedule(content.id, new Date(Date.now() + 10 * 24 * HOUR));
       await sweep();
       expect(mock.state.jobs.get(jobId)!.status).toBe("cancelled");
       expect((await pub(target.id)).status).toBe("CANCELLED");
@@ -301,7 +387,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
       await sweep();
       const jb = (await pub(b.target.id)).providerJobId!;
       mock.state.jobs.get(jb)!.inProgress = true;
-      await prisma.content.update({ where: { id: b.content.id }, data: { scheduledAt: new Date(Date.now() + 6 * HOUR) } });
+      await moveSchedule(b.content.id, new Date(Date.now() + 6 * HOUR));
       const s = await sweep();
       expect(s.driftRescheduled).toBe(0); // 409: deferred, nothing changed
       expect((await pub(b.target.id)).status).toBe("SCHEDULED_AT_PROVIDER");

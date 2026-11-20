@@ -19,6 +19,7 @@
     "@socialith/config": "workspace:*",
     "@socialith/database": "workspace:*",
     "@socialith/types": "workspace:*",
+    "@socialith/publishing": "workspace:*",
     "@socialith/upload-post": "workspace:*",
     "@socialith/video-engine": "workspace:*",
     "bullmq": "^5.12.0",

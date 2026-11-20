@@ -29,6 +29,7 @@ export default defineConfig({
       NODE_ENV: "test",
       DATABASE_URL: url,
       SESSION_SECRET: "integration-test-session-secret-0123456789",
+      LOG_LEVEL: "silent",
       TOKEN_ENCRYPTION_KEY: "ab".repeat(32),
       // Upload-Post tests talk to the in-repo contract double (fixed loopback port), never to the live service.
       UPLOAD_POST_API_KEY: "test-key-0000000000",

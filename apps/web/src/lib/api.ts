@@ -46,6 +46,8 @@ export class ApiError extends Error {
     public status: number,
     public code: string,
     message = "",
+    /** Structured detail from the server, e.g. the validation issues that blocked a publishing action. */
+    public details?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -69,7 +71,7 @@ async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(res.status, "INTERNAL_ERROR", "Unexpected server response.");
   }
   if (!body.success) {
-    throw new ApiError(res.status, body.error.code, body.error.message);
+    throw new ApiError(res.status, body.error.code, body.error.message, body.error.details);
   }
   return body.data;
 }
@@ -83,6 +85,10 @@ export function apiPost<T>(path: string, data?: unknown): Promise<T> {
     method: "POST",
     body: data === undefined ? undefined : JSON.stringify(data),
   });
+}
+
+export function apiPut<T>(path: string, data: unknown): Promise<T> {
+  return apiRequest<T>(path, { method: "PUT", body: JSON.stringify(data) });
 }
 
 export function apiPatch<T>(path: string, data: unknown): Promise<T> {

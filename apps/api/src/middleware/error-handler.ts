@@ -7,6 +7,7 @@ export class ApiHttpError extends Error {
     public statusCode: number,
     public code: string,
     message: string,
+    public details?: unknown,
   ) {
     super(message);
     this.name = "ApiHttpError";
@@ -26,7 +27,7 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   if (err instanceof ApiHttpError) {
     const body: ApiResponse<never> = {
       success: false,
-      error: { code: err.code, message: err.message },
+      error: { code: err.code, message: err.message, ...(err.details !== undefined ? { details: err.details } : {}) },
     };
     res.status(err.statusCode).json(body);
     return;

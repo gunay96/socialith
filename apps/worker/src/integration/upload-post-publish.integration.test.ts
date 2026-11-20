@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@socialith/database";
+import { buildTargetPayload } from "@socialith/publishing";
 import { UploadPostClient, defaultProfiles, startMockUploadPostServer, type MockUploadPostHandle } from "@socialith/upload-post";
 
 // The processors obtain their client from this module; point it at the contract double.
@@ -38,6 +39,9 @@ function makeClient(overrides: Partial<ConstructorParameters<typeof UploadPostCl
 
 async function setup(platform: "tiktok" | "instagram" | "youtube" = "tiktok", assetType: "VIDEO" | "IMAGE" = "VIDEO", profile = "acme_music") {
   const org = await prisma.organization.create({ data: { name: "IT UPP", slug: `it-upp-${randomUUID().slice(0, 8)}` } });
+  // These tests exercise scheduling MECHANICS, not approval. Approval is required by default (product decision), so each
+  // organization here explicitly saves the opt-out; approval itself is covered in publishing-center.integration.test.ts.
+  await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval: false } });
   await syncUploadPostProfiles({ db: prisma, client: makeClient(), log: silent }, org.id, "MANUAL");
   const profileRow = await prisma.uploadPostProfile.findUniqueOrThrow({ where: { organizationId_username: { organizationId: org.id, username: profile } } });
   const acc = await prisma.uploadPostConnectedAccount.findUniqueOrThrow({ where: { profileId_platform: { profileId: profileRow.id, platform } } });
@@ -155,6 +159,49 @@ suite("Upload-Post publishing (real MySQL, contract double)", () => {
     expect(sent[0]!.headers["idempotency-key"]).toBe(sent[1]!.headers["idempotency-key"]);
   });
 
+  describe("invalid provider responses are an UNKNOWN outcome — never a success, never a blind resend", () => {
+    const upload = (m: string, p: string) => m === "POST" && p === "/upload";
+    for (const [label, body] of [["an HTML error page", "<html><body>502 Bad Gateway</body></html>"], ["an empty answer", ""], ["JSON without any id", { success: true }]] as const) {
+      it(`HTTP 200 with ${label}: marked UNKNOWN_OUTCOME, the target is not published, and the retry asks the provider before re-sending (same Idempotency-Key)`, async () => {
+        const { target: t } = await setup();
+        mock.script({ match: upload, status: 200, body });
+        await expect(run(t.id)).rejects.toThrow();
+        expect(await publication(t.id)).toMatchObject({ status: "UNKNOWN_OUTCOME", lastErrorKind: "INVALID_RESPONSE" });
+        expect((await target(t.id)).status).toBe("PUBLISHING"); // neither published nor failed: nobody knows yet
+        expect(mock.state.publications.size).toBe(0); // it never reached the provider in this scenario
+
+        await run(t.id); // the retry
+        expect(mock.state.publications.size).toBe(1);
+        const sent = providerRequests("/upload");
+        expect(sent).toHaveLength(2); // the status check found nothing, so it is re-sent …
+        expect(sent[0]!.headers["idempotency-key"]).toBe(sent[1]!.headers["idempotency-key"]); // … with the SAME key
+        expect((await publication(t.id)).status).toBe("PROCESSING");
+      });
+    }
+
+    it("if the provider DID create the job although its answer was unreadable, the retry adopts it: still exactly one provider job", async () => {
+      const { target: t } = await setup();
+      mock.script({ match: upload, status: 200, body: "<html>proxy error</html>" });
+      await expect(run(t.id)).rejects.toThrow();
+      const pub = await publication(t.id);
+      // the provider had in fact accepted it (the answer was mangled on the way back)
+      mock.state.publications.set(pub.requestId, { requestId: pub.requestId, externalId: pub.externalId, profile: "acme_music", platforms: ["tiktok"], status: "processing", results: [], fields: {}, mediaType: "video" });
+      mock.state.requests.length = 0;
+      await run(t.id);
+      expect(providerRequests("/upload")).toHaveLength(0); // adopted, not re-sent
+      expect(mock.state.publications.size).toBe(1);
+      expect((await publication(t.id)).status).toBe("PROCESSING");
+    });
+
+    it("an unreadable STATUS answer never marks anything published", async () => {
+      const { target: t } = await setup();
+      await run(t.id);
+      mock.script({ match: (m, p) => m === "GET" && p === "/uploadposts/status", status: 200, body: "<html>maintenance</html>" }, 1); // exactly the one status request the poll makes: a scripted answer must never outlive its test
+      await poll(t.id, 2).catch(() => undefined);
+      expect((await target(t.id)).status).toBe("PUBLISHING");
+      expect((await publication(t.id)).status).not.toBe("COMPLETED");
+    });
+  });
   it("a provider-side failure finalizes the target and content as FAILED with the provider's reason", async () => {
     const { target: t, content } = await setup();
     await run(t.id);
@@ -273,6 +320,74 @@ suite("Upload-Post publishing (real MySQL, contract double)", () => {
     });
   });
 
+  describe("Publishing Center: approval gate, destination-specific text, required track", () => {
+    async function requireApproval(orgId: string) {
+      await prisma.publishingSettings.update({ where: { organizationId: orgId }, data: { requireApproval: true } });
+    }
+    async function approveNow(targetId: string) {
+      const t = await prisma.contentTarget.findUniqueOrThrow({ where: { id: targetId }, include: { socialAccount: { select: { platform: true } }, content: { include: { variations: true, assets: true } } } });
+      const payload = buildTargetPayload({ platform: t.socialAccount.platform, captionOverride: t.captionOverride, titleOverride: t.titleOverride, content: { caption: t.content.caption, soundId: t.content.soundId, variations: t.content.variations, assets: t.content.assets } });
+      await prisma.contentTarget.update({ where: { id: targetId }, data: { approvalStatus: "APPROVED", approvedPayload: payload } });
+    }
+
+    it("an unapproved publication never reaches the provider, whichever path started it (retry, recovery)", async () => {
+      const { org, target: t } = await setup();
+      await requireApproval(org.id);
+      await run(t.id);
+      const attempt = await prisma.publishAttempt.findFirstOrThrow({ where: { contentTargetId: t.id } });
+      expect(attempt).toMatchObject({ status: "FAILED", errorCode: "CONFIGURATION_ERROR", retryable: false });
+      expect(attempt.errorMessage).toMatch(/not been approved/);
+      expect((await target(t.id)).status).toBe("FAILED");
+      expect(providerRequests("/upload")).toHaveLength(0);
+    });
+
+    it("an approved publication goes out; content edited after approval does not", async () => {
+      const ok = await setup();
+      await requireApproval(ok.org.id);
+      await approveNow(ok.target.id);
+      await run(ok.target.id);
+      expect(providerRequests("/upload")).toHaveLength(1);
+
+      mock.state.requests.length = 0;
+      const changed = await setup();
+      await requireApproval(changed.org.id);
+      await approveNow(changed.target.id);
+      await prisma.content.update({ where: { id: changed.content.id }, data: { caption: "edited after approval" } });
+      await run(changed.target.id);
+      expect((await prisma.publishAttempt.findFirstOrThrow({ where: { contentTargetId: changed.target.id } })).errorMessage).toMatch(/changed after it was approved/);
+      expect(providerRequests("/upload")).toHaveLength(0);
+    });
+
+    it("the destination's own caption and title are what is sent, not the shared caption", async () => {
+      const { target: t } = await setup();
+      await prisma.contentTarget.update({ where: { id: t.id }, data: { captionOverride: "Written for this page only" } });
+      await run(t.id);
+      const pub = await publication(t.id);
+      expect(mock.state.publications.get(pub.requestId)!.fields.tiktok_title).toBe("Written for this page only");
+    });
+
+    it("'require the track': a missing/unverified track makes the publication fail BEFORE any provider call instead of going out without it", async () => {
+      const { org, content, target: t } = await setup();
+      const sound = await prisma.sound.create({ data: { organizationId: org.id, title: "Neon Skyline", artist: "Wave Theory", platform: "TIKTOK" } });
+      await prisma.content.update({ where: { id: content.id }, data: { soundId: sound.id } });
+      await prisma.contentTarget.update({ where: { id: t.id }, data: { requireMusic: true } });
+      await run(t.id);
+      const attempt = await prisma.publishAttempt.findFirstOrThrow({ where: { contentTargetId: t.id } });
+      expect(attempt).toMatchObject({ status: "FAILED", errorCode: "CONFIGURATION_ERROR", retryable: false });
+      expect(attempt.errorMessage).toMatch(/track is required/);
+      expect(providerRequests("/upload")).toHaveLength(0);
+      expect(await publication(t.id)).toMatchObject({ status: "FAILED", lastErrorKind: "MUSIC_REQUIRED" });
+    });
+
+    it("without 'require the track' the same situation publishes without the track and records why (unchanged behaviour)", async () => {
+      const { org, content, target: t } = await setup();
+      const sound = await prisma.sound.create({ data: { organizationId: org.id, title: "Neon Skyline", artist: "Wave Theory", platform: "TIKTOK" } });
+      await prisma.content.update({ where: { id: content.id }, data: { soundId: sound.id } });
+      await run(t.id);
+      expect(providerRequests("/upload")).toHaveLength(1);
+      expect((await publication(t.id)).notes).toMatch(/Music not attached/);
+    });
+  });
   describe("TikTok music", () => {
     async function withSound(mapping: Partial<{ availability: "VERIFIED_AVAILABLE" | "UNVERIFIED" | "UNAVAILABLE"; rightsConfirmed: boolean; verifiedAt: Date | null }> | null) {
       const s = await setup();

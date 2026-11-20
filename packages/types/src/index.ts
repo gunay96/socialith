@@ -14,6 +14,8 @@ export type ApiError = {
   error: {
     code: string;
     message: string;
+    /** Optional structured detail (e.g. the list of validation issues that blocked an action). */
+    details?: unknown;
   };
 };
 
@@ -36,6 +38,8 @@ export const ERROR_CODES = {
   RENDER_FAILED: "RENDER_FAILED",
   ACCOUNT_DISABLED: "ACCOUNT_DISABLED",
   INTERNAL_ERROR: "INTERNAL_ERROR",
+  // Phase 3: an action was refused because the publication failed platform validation (details = the issues).
+  VALIDATION_FAILED: "VALIDATION_FAILED",
   // Phase 10: normalized, user-facing codes for provider/config failures
   // that previously only existed as PublishErrorCode strings internal to
   // apps/worker — surfaced through the API/UI so "Something went wrong"

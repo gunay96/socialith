@@ -86,6 +86,8 @@ model Organization {
   uploadPostSyncRuns     UploadPostSyncRun[]
   uploadPostPublications UploadPostPublication[]
   soundMusicMappings     SoundMusicMapping[]
+  publicationEvents      PublicationEvent[]
+  publishingSettings     PublishingSettings?
 
   @@map("organizations")
 }
@@ -118,6 +120,8 @@ model User {
   requestedGenerationJobs ContentGenerationJob[]
   requestedRenderJobs     VideoRenderJob[]
   createdSounds           Sound[]
+  publicationEvents       PublicationEvent[]
+  contentRevisions        ContentRevision[]
 
   @@index([organizationId])
   @@map("users")
@@ -338,16 +342,19 @@ enum CampaignStatus {
 // content.campaign_id is nullable (see Content below), so content never
 // *requires* one.
 model Campaign {
-  id             String         @id @default(cuid())
-  organizationId String         @map("organization_id")
-  name           String
-  description    String?        @db.Text
-  status         CampaignStatus @default(DRAFT)
-  startAt        DateTime?      @map("start_at")
-  endAt          DateTime?      @map("end_at")
-  createdById    String?        @map("created_by_id")
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  id                     String         @id @default(cuid())
+  organizationId         String         @map("organization_id")
+  name                   String
+  description            String?        @db.Text
+  status                 CampaignStatus @default(DRAFT)
+  startAt                DateTime?      @map("start_at")
+  endAt                  DateTime?      @map("end_at")
+  // Phase 3: schedule a publication automatically at the time a person proposed as soon as it is approved.
+  // null = inherit PublishingSettings.autoScheduleOnApproval.
+  autoScheduleOnApproval Boolean?       @map("auto_schedule_on_approval")
+  createdById            String?        @map("created_by_id")
+  createdAt              DateTime       @default(now()) @map("created_at")
+  updatedAt              DateTime       @updatedAt @map("updated_at")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -419,6 +426,7 @@ model Content {
   targets        ContentTarget[]
   generationJobs ContentGenerationJob[]
   renderJobs     VideoRenderJob[]
+  revisions      ContentRevision[]
 
   @@index([organizationId, status])
   @@index([organizationId, campaignId])
@@ -533,20 +541,20 @@ model ContentAsset {
 // index below is chosen for exactly that future query, even though
 // nothing in Phase 05 runs it yet (no real publishing here).
 model ContentTarget {
-  id                  String              @id @default(cuid())
-  contentId           String              @map("content_id")
-  socialAccountId     String              @map("social_account_id")
-  status              ContentTargetStatus @default(PENDING)
-  scheduledAt         DateTime?           @map("scheduled_at")
-  publishedAt         DateTime?           @map("published_at")
+  id                  String                    @id @default(cuid())
+  contentId           String                    @map("content_id")
+  socialAccountId     String                    @map("social_account_id")
+  status              ContentTargetStatus       @default(PENDING)
+  scheduledAt         DateTime?                 @map("scheduled_at")
+  publishedAt         DateTime?                 @map("published_at")
   // Populated once real publishing exists (Phase 08) — e.g. the
   // provider's post ID, so analytics (Phase 09) can look it up.
-  externalPostId      String?             @map("external_post_id")
+  externalPostId      String?                   @map("external_post_id")
   // A user-facing link to the live post, when the platform's publish
   // response includes or implies one (e.g. YouTube: derivable from the
   // video ID; Instagram/TikTok: not always returned synchronously).
-  externalPostUrl     String?             @map("external_post_url") @db.Text
-  errorMessage        String?             @map("error_message") @db.Text
+  externalPostUrl     String?                   @map("external_post_url") @db.Text
+  errorMessage        String?                   @map("error_message") @db.Text
   // Phase 10 TikTok-review hardening: a real, honest caveat for a target
   // whose provider reported COMPLETE but that doesn't mean "live" — e.g.
   // TikTok's real Upload/Inbox flow (video.upload scope) delivers to the
@@ -554,31 +562,53 @@ model ContentTarget {
   // finish the post manually in the TikTok app. Null for a target whose
   // PUBLISHED status genuinely means live/public. See
   // apps/worker/src/publishing/types.ts's PublishStatusResult.deliveryNote.
-  deliveryNote        String?             @map("delivery_note") @db.Text
+  deliveryNote        String?                   @map("delivery_note") @db.Text
   // Denormalized running count of PublishAttempt rows below — same
   // pattern as ContentGenerationJob/VideoRenderJob.attempts (Phase 07):
   // cheap idempotency/backoff checks without a COUNT query. The
   // individual attempts themselves (with their own error/response
   // detail) live in PublishAttempt, not duplicated here.
-  attemptCount        Int                 @default(0) @map("attempt_count")
+  attemptCount        Int                       @default(0) @map("attempt_count")
   // Phase 10: stamped at the *start* of every analytics-sync attempt
   // (success or failure) — what the analytics-sync-scan processor orders
   // by to spread out real re-syncs instead of hammering the same targets
   // every scan cycle. Distinct from PostMetricsSnapshot.fetchedAt, which
   // only exists on a successful sync.
-  lastAnalyticsSyncAt DateTime?           @map("last_analytics_sync_at")
-  createdAt           DateTime            @default(now()) @map("created_at")
-  updatedAt           DateTime            @updatedAt @map("updated_at")
+  lastAnalyticsSyncAt DateTime?                 @map("last_analytics_sync_at")
+  // ---- Phase 3 (Publishing Center). All additive; the execution status above is unchanged. ----
+  // Human workflow state of THIS destination's publication (each destination is approved on its own).
+  approvalStatus      PublicationApprovalStatus @default(DRAFT) @map("approval_status")
+  // Operator / stale-guard marker. HELD and CANCELLED live on a PENDING target (so no scheduler fires it);
+  // STALE marks a FAILED target that missed its slot. See @socialith/publishing derivePublicationState().
+  exception           PublicationException?
+  // Destination-specific text; wins over the platform variation and the base caption.
+  captionOverride     String?                   @map("caption_override") @db.Text
+  titleOverride       String?                   @map("title_override") @db.VarChar(255)
+  // Make the TikTok track conditions blocking for this destination instead of publishing without the track.
+  requireMusic        Boolean                   @default(false) @map("require_music")
+  // The canonical effective payload that was approved (see @socialith/publishing canonicalPayload()). Scheduling and
+  // the worker compare the current payload with it; a mismatch means the content changed after approval.
+  approvedPayload     String?                   @map("approved_payload") @db.Text
+  submittedById       String?                   @map("submitted_by_id")
+  submittedAt         DateTime?                 @map("submitted_at")
+  approvedById        String?                   @map("approved_by_id")
+  approvedAt          DateTime?                 @map("approved_at")
+  // IANA zone the time was entered in (scheduledAt itself is always a UTC instant).
+  scheduledTimezone   String?                   @map("scheduled_timezone") @db.VarChar(64)
+  createdAt           DateTime                  @default(now()) @map("created_at")
+  updatedAt           DateTime                  @updatedAt @map("updated_at")
 
   content               Content                @relation(fields: [contentId], references: [id], onDelete: Cascade)
   socialAccount         SocialAccount          @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
   publishAttempts       PublishAttempt[]
   metricsSnapshots      PostMetricsSnapshot[]
   uploadPostPublication UploadPostPublication?
+  publicationEvents     PublicationEvent[]
 
   @@unique([contentId, socialAccountId])
   @@index([socialAccountId])
   @@index([status, scheduledAt])
+  @@index([approvalStatus, status])
   @@index([status, lastAnalyticsSyncAt])
   @@map("content_targets")
 }
@@ -1000,7 +1030,7 @@ model UploadPostPublication {
   lastErrorKind      String?                     @map("last_error_kind")
   lastErrorMessage   String?                     @map("last_error_message") @db.Text
   // Delivery caveats worth showing next to the target (e.g. why a mapped TikTok track was not attached).
-  notes            String?                     @db.Text
+  notes              String?                     @db.Text
   submittedAt        DateTime?                   @map("submitted_at")
   completedAt        DateTime?                   @map("completed_at")
   createdAt          DateTime                    @default(now()) @map("created_at")
@@ -1072,4 +1102,117 @@ model SoundMusicMapping {
   @@index([organizationId, soundId])
   @@index([organizationId, availability])
   @@map("sound_music_mappings")
+}
+
+// ======================================================================================================
+// Phase 3 — Publishing Center (additive)
+// ======================================================================================================
+
+enum PublicationApprovalStatus {
+  DRAFT
+  READY_FOR_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum PublicationException {
+  HELD
+  CANCELLED
+  STALE
+}
+
+enum PublicationEventType {
+  CREATED
+  EDITED
+  SUBMITTED
+  APPROVED
+  REJECTED
+  WITHDRAWN
+  INVALIDATED
+  SCHEDULED
+  AUTO_SCHEDULED
+  RESCHEDULED
+  UNSCHEDULED
+  HELD
+  RELEASED
+  CANCELLED
+  REOPENED
+  RETRIED
+  MARKED_STALE
+}
+
+enum PublishingDuplicateGuard {
+  BLOCK
+  WARN
+  OFF
+}
+
+// Append-only history of everything a person (or the system) did to one publication: approvals with the approver
+// and reason, scheduling changes, holds, cancellations. Never updated, never deleted except with the target.
+model PublicationEvent {
+  id              String               @id @default(cuid())
+  organizationId  String               @map("organization_id")
+  contentTargetId String               @map("content_target_id")
+  type            PublicationEventType
+  // Derived lifecycle states (strings, see @socialith/publishing) before and after.
+  fromState       String?              @map("from_state") @db.VarChar(32)
+  toState         String?              @map("to_state") @db.VarChar(32)
+  // null = the system (auto-schedule, stale guard)
+  actorId         String?              @map("actor_id")
+  reason          String?              @db.Text
+  metadata        Json?
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  organization  Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contentTarget ContentTarget @relation(fields: [contentTargetId], references: [id], onDelete: Cascade)
+  actor         User?         @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([contentTargetId, createdAt])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, type, createdAt])
+  @@map("publication_events")
+}
+
+// A snapshot of a content item (caption, variations, assets, track) taken whenever a publication of it is
+// submitted for review, so what was reviewed can always be reconstructed.
+model ContentRevision {
+  id          String   @id @default(cuid())
+  contentId   String   @map("content_id")
+  revision    Int
+  snapshot    Json
+  reason      String?  @db.VarChar(255)
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([contentId, revision])
+  @@map("content_revisions")
+}
+
+// One row per organization, created lazily by PUT /api/publishing/settings. An organization without a row behaves
+// exactly as before Phase 3 (approval not required); the values below are what a NEW row starts with.
+model PublishingSettings {
+  id                           String                   @id @default(cuid())
+  organizationId               String                   @unique @map("organization_id")
+  timezone                     String                   @default("Europe/Istanbul") @db.VarChar(64)
+  requireApproval              Boolean                  @default(true) @map("require_approval")
+  // The OWNER may approve their own submission (default on); an ADMIN only when the organization allows it (default off).
+  // CREATOR users can never approve (enforced in code, @socialith/publishing evaluateApprover). Column of adminSelfApproval keeps its Phase 3 name.
+  ownerSelfApproval            Boolean                  @default(true) @map("owner_self_approval")
+  adminSelfApproval            Boolean                  @default(false) @map("allow_self_approval")
+  autoScheduleOnApproval       Boolean                  @default(false) @map("auto_schedule_on_approval")
+  duplicateGuard               PublishingDuplicateGuard @default(BLOCK) @map("duplicate_guard")
+  similarityThresholdPct       Int                      @default(85) @map("similarity_threshold_pct")
+  maxSimilarPerPlatform        Int                      @default(1) @map("max_similar_per_platform")
+  maxPostsPerDestinationPerDay Int                      @default(3) @map("max_posts_per_destination_per_day")
+  minMinutesBetweenPosts       Int                      @default(60) @map("min_minutes_between_posts")
+  minLeadMinutes               Int                      @default(10) @map("min_lead_minutes")
+  createdAt                    DateTime                 @default(now()) @map("created_at")
+  updatedAt                    DateTime                 @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("publishing_settings")
 }

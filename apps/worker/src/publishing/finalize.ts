@@ -7,7 +7,8 @@ import type { PrismaClient } from "@socialith/database";
  */
 export async function finalizeContentStatus(db: PrismaClient, contentId: string): Promise<void> {
   const remaining = await db.contentTarget.count({
-    where: { contentId, status: { in: ["PENDING", "SCHEDULED", "PUBLISHING"] } },
+    // held / cancelled targets (Phase 3) are parked on purpose and do not keep the content open
+    where: { contentId, status: { in: ["PENDING", "SCHEDULED", "PUBLISHING"] }, OR: [{ exception: null }, { exception: "STALE" }] },
   });
   if (remaining > 0) return;
 
