@@ -122,7 +122,22 @@ New items found in Phase 2:
 | TD-51 | — | ~~Organizations that never saved Publishing Settings did not require approval~~ **CLOSED (owner decision, Phase 3 final)**: approval is required by default for new organizations and for organizations with no saved preference; explicit preferences are preserved | [code][test] | — | Done |
 | TD-52 | S3 | Calendar has no drag-and-drop rescheduling and no automated browser tests for the Publishing Center | [code] | Rescheduling is a button + date field; UI regressions are caught by hand | Add drag-and-drop and a Playwright smoke suite |
 | TD-53 | S3 | Manual Upload-Post sweep after an operator change is best-effort and deduplicated; the provider job is edited within seconds when the queue is up, otherwise on the next minute tick | [code][test] | Brief delay in provider-side cancel/edit | Acceptable; the database is the master either way |
-## Debt that is **not** debt (preserve)
+
+## Status updates — Phase 4 (Page Network, branch `phase4-page-network`)
+
+| ID | New status |
+|---|---|
+| TD-10 | **Partly resolved**: `ManagedPage` (extended), `PageCategory`, `PageGroup` and the campaign-page links now exist; Artist, MediaPack, TextLibrary, Recipe remain (Phases 5-7). |
+| TD-12 | **Resolved**: thematic pages, creators, publishing destinations and Upload-Post profiles are four separate records; a page *references* its destination (`managed_pages.social_account_id`), `SocialAccount` was not repurposed. |
+| TD-48 | **Resolved for the Page Network** (category, group and platform filters on pages and groups; pages by category on campaigns). The Publishing Center's own list still filters by page, not by category or group (see TD-56). |
+
+| ID | Sev | Debt | Evidence | Consequence | Fix direction |
+|---|---|---|---|---|---|
+| TD-54 | S2 | **`GET /api/analytics/campaigns/:id` answers 500 on MySQL**: `analytics.repository.ts` still uses a PostgreSQL-only `DISTINCT ON` query. Found while checking the campaign screen in the browser; it predates Phase 4 (file untouched) and the campaign page swallows it as an unhandled rejection | [live][code] | The campaign "Performance" block cannot load on the canonical MySQL stack | Rewrite the query for MySQL 8.4 (window function) in Phase 9 (Analytics), or earlier if the owner wants it fixed first |
+| TD-55 | S3 | Group-level content preferences are applied only when a group is named (identity preview, text check). A page in several groups would otherwise have an ambiguous group layer, so the Publishing Center's page rules use page over category only | [code] | A group preference never silently changes what a page is checked against | Decide a precedence (e.g. the campaign's group) in Phase 6 when the Format Engine starts consuming the profile |
+| TD-56 | S3 | Two page mappings coexist: the Phase 2 profile mapping (`upload_post_profiles.managed_page_id`, brand level) and the Phase 4 destination link (`managed_pages.social_account_id`, per platform). A direct link wins in the Publishing Center; a mismatch is flagged on the page, never changed automatically | [code] | An administrator may see "profile mapped to another page" until they tidy the Phase 2 mapping | Optional clean-up tool; the Publishing Center category/group filters belong here too |
+| TD-57 | S3 | The "account has a problem" page filter is computed in memory after loading the matching pages (the state is derived from live provider rows, no column holds it) | [code] | Fine for tens to low hundreds of pages; slow if a network grows to thousands | Materialize the state on sync if the network grows |
+| TD-58 | S3 | The Creator role does not exist yet (Phase 8). Privacy is enforced by never putting creator data into page responses and by refusing creator-owned accounts as page destinations; the role gate (`canSeeInternal`) is ready for a role below VIEWER | [code][test] | None today (no creator logins) | Phase 8: add the role and tests through the API |## Debt that is **not** debt (preserve)
 
 Layered architecture (routes → controllers → services → repositories), org-scoped
 repositories, immutable `PublishAttempt` audit trail, retry/backoff classification
