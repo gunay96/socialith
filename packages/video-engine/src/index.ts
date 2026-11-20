@@ -7,3 +7,4 @@ export * from "./presets.js";
 export * from "./operations.js";
 export * from "./probe.js";
 export * from "./thumbnails.js";
+export * from "./render/index.js";

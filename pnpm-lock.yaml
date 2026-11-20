@@ -378,6 +378,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1173.0
         version: 3.1173.0
+      '@socialith/studio':
+        specifier: workspace:*
+        version: link:../studio
     devDependencies:
       '@types/node':
         specifier: ^20.14.0
@@ -385,6 +388,9 @@ importers:
       typescript:
         specifier: ^5.5.0
         version: 5.9.3
+      vite-tsconfig-paths:
+        specifier: ^4.3.2
+        version: 4.3.2(typescript@5.9.3)(vite@5.4.21(@types/node@20.19.43))
       vitest:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)

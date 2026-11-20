@@ -6,7 +6,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
@@ -15,11 +15,13 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1173.0",
     "@aws-sdk/lib-storage": "^3.1173.0",
-    "@aws-sdk/s3-request-presigner": "^3.1173.0"
+    "@aws-sdk/s3-request-presigner": "^3.1173.0",
+    "@socialith/studio": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0"
+    "vitest": "^2.0.0",
+    "vite-tsconfig-paths": "^4.3.2"
   }
 }
