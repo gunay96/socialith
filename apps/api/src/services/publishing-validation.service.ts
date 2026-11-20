@@ -10,7 +10,8 @@ import {
   type PlatformKey,
   type ValidationIssue,
 } from "@socialith/publishing";
-import { effectiveTextOf, type EffectiveSettings, type Publication, PUBLICATION_INCLUDE } from "./publishing-common.js";
+import { pageRuleIssuesFor } from "./page-network-page.service.js";
+import { destinationFactsOf, effectiveTextOf, type EffectiveSettings, type Publication, PUBLICATION_INCLUDE } from "./publishing-common.js";
 
 /** A music verification older than this is not trusted — the same limit the worker applies (apps/worker/src/upload-post/publish.ts). */
 export const MUSIC_VERIFICATION_MAX_AGE_DAYS = 30;
@@ -87,30 +88,12 @@ export interface ValidateOptions {
 /** Platform validation for ONE publication, plus the repetitive-distribution guard against its siblings. */
 export async function validatePublicationTarget(t: Publication, opts: ValidateOptions): Promise<{ ok: boolean; issues: ValidationIssue[]; media: MediaVerification; fullyValidated: boolean }> {
   const platform = t.socialAccount.platform as PlatformKey;
-  const up = t.socialAccount.uploadPostAccount;
   const text = effectiveTextOf(t);
-  const meta = t.socialAccount.providerMetadata;
   const caps = opts.skipCaps ? { maxPerDay: Number.MAX_SAFE_INTEGER, minSpacingMinutes: 0, sameDayCount: 0, nearestNeighbourMinutes: null, dayLabel: "" } : await capFacts(t, opts.scheduledAt, opts.settings);
 
   const result = validatePublication({
     platform,
-    destination: {
-      platform,
-      handle: t.socialAccount.handle,
-      accountStatus: t.socialAccount.status,
-      isDemo: typeof meta === "object" && meta !== null && !Array.isArray(meta) && (meta as Record<string, unknown>).seed === true,
-      provider: t.socialAccount.publishingProvider,
-      uploadPost: up
-        ? {
-            accountStatus: up.status,
-            accountPlatform: up.platform,
-            capabilities: Array.isArray(up.capabilities) ? up.capabilities.filter((c): c is string => typeof c === "string") : [],
-            profileStatus: up.profile.status,
-            profileBlocked: up.profile.blocked,
-            identityUnchanged: up.providerAccountId === t.socialAccount.externalAccountId,
-          }
-        : null,
-    },
+    destination: destinationFactsOf(t.socialAccount),
     assets: assetFacts(t),
     caption: text.caption,
     title: text.title,
@@ -119,7 +102,9 @@ export async function validatePublicationTarget(t: Publication, opts: ValidateOp
     caps,
   });
 
-  const issues = [...result.issues, ...(await repetitionIssues(t, opts.settings))];
+  // page-specific content rules and originality (Page Network): guidance that warns by default and blocks only when the page says so
+  const pageIssues = await pageRuleIssuesFor({ socialAccountId: t.socialAccountId, platform, text: text.caption, excludeTargetId: t.id, fallbackThresholdPct: opts.settings.similarityThresholdPct });
+  const issues = [...result.issues, ...(await repetitionIssues(t, opts.settings)), ...pageIssues];
   const ok = !issues.some((i) => i.severity === "ERROR");
   // `ok` means "nothing is known to be wrong"; only known media facts make it "fully validated" (never assumed).
   return { ok, issues, media: result.media, fullyValidated: ok && result.media.status === "VERIFIED" };

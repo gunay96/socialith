@@ -19,6 +19,7 @@ import { createPlatformCapabilitiesRouter } from "./routes/platform-capabilities
 import { createDashboardRouter } from "./routes/dashboard.js";
 import { createUploadPostRouter, createUploadPostWebhookRouter } from "./routes/upload-post.js";
 import { createPublishingRouter } from "./routes/publishing.js";
+import { createPageNetworkRouter } from "./routes/page-network.js";
 import { createSessionMiddleware } from "./lib/session.js";
 import {
   createLoginRateLimiter,
@@ -138,6 +139,7 @@ export function createApp(redis: Redis | null): express.Express {
   app.use("/api", createDashboardRouter());
   app.use("/api", createUploadPostRouter());
   app.use("/api", createPublishingRouter());
+  app.use("/api", createPageNetworkRouter());
   app.use("/api", createUploadPostWebhookRouter());
 
   app.use(notFoundHandler);

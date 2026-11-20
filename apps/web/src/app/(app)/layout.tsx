@@ -72,6 +72,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
             <NavLink href="/campaigns" label="Campaigns" />
             <NavLink href="/content" label="Content" />
             <NavLink href="/sounds" label="Music / Sounds" />
+            <NavLink href="/page-network" label="Page Network" />
             <NavLink href="/publishing" label="Publishing Center" />
             <NavLink href="/upload-post" label="Upload-Post" />
             <NavLink href="/team" label="Team" />
@@ -88,7 +89,7 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
             </button>
           </div>
         </aside>
-        <div className="flex-1 p-8">{children}</div>
+        <div className="min-w-0 flex-1 p-8">{children}</div>
       </div>
     </CurrentUserProvider>
   );
