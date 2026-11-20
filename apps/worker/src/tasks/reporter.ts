@@ -74,13 +74,14 @@ export class TaskReporter {
   }
 
   /** The task starts (or restarts after a retry): RUNNING, attempt counted, start time kept from the first attempt. */
-  async start(patch: { stage?: string; stageDetail?: string | null; totalUnits?: number | null; unit?: string | null } = {}): Promise<void> {
+  async start(patch: { stage?: string; stageDetail?: string | null; totalUnits?: number | null; unit?: string | null; completedUnits?: number } = {}): Promise<void> {
     await this.enqueue(async () => {
       const current = await prisma.operationTask.findUnique({ where: { id: this.taskId } });
       if (!current) throw new Error(`Task ${this.taskId} does not exist`);
       if (!(ACTIVE as readonly string[]).includes(current.status)) return; // already finished: never resurrect
       const at = this.now();
-      this.completed = current.completedUnits;
+      // a restart that cannot resume (a render starts over) says so by resetting the count; a resumable task keeps it
+      this.completed = patch.completedUnits ?? current.completedUnits;
       const updated = await prisma.operationTask.update({
         where: { id: this.taskId },
         data: {
@@ -95,6 +96,7 @@ export class TaskReporter {
           ...(patch.stageDetail !== undefined ? { stageDetail: patch.stageDetail } : {}),
           ...(patch.totalUnits !== undefined ? { totalUnits: patch.totalUnits } : {}),
           ...(patch.unit !== undefined ? { unit: patch.unit } : {}),
+          ...(patch.completedUnits !== undefined ? { completedUnits: patch.completedUnits } : {}),
         },
       });
       this.lastWriteAt = at.getTime();
@@ -153,7 +155,12 @@ export class TaskReporter {
     await this.finish("FAILED", { errorCode: failure.code.slice(0, 64), errorMessage: failure.message, errorRemedy: failure.remedy ?? null, stage: "Failed", stageDetail: null });
   }
 
-  private async finish(status: "SUCCEEDED" | "FAILED", data: Record<string, unknown>): Promise<void> {
+  /** The person cancelled it. Terminal, like success and failure, and never undone by a late update. */
+  async cancel(): Promise<void> {
+    await this.finish("CANCELLED", { stage: "Cancelled", stageDetail: null });
+  }
+
+  private async finish(status: "SUCCEEDED" | "FAILED" | "CANCELLED", data: Record<string, unknown>): Promise<void> {
     await this.enqueue(async () => {
       this.pending = null;
       const at = this.now();
