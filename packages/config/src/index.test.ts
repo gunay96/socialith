@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EnvValidationError, parseEnv, resolveOAuthRedirectUri } from "./index.js";
+import { EnvValidationError, parseEnv, resolveFfprobePath, resolveLibraryStorageConfig, resolveMediaLibraryDir, resolveMediaLimits, resolveOAuthRedirectUri } from "./index.js";
 
 const BASE = {
   DATABASE_URL: "mysql://u:p@localhost:3306/db",
@@ -165,5 +165,66 @@ describe("parseEnv — Upload-Post (Phase 2)", () => {
   it("bounds the hand-off window and timeouts", () => {
     expect(issuesOf({ ...BASE, UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS: "0" }).map((i) => i.path)).toContain("UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS");
     expect(issuesOf({ ...BASE, UPLOAD_POST_TIMEOUT_MS: "10" }).map((i) => i.path)).toContain("UPLOAD_POST_TIMEOUT_MS");
+  });
+});
+
+describe("media library configuration (Phase 5A)", () => {
+  const R2 = { R2_ACCOUNT_ID: "acct", R2_ACCESS_KEY_ID: "key", R2_SECRET_ACCESS_KEY: "secret", R2_BUCKET_NAME: "public-media", R2_PUBLIC_URL: "https://cdn.example.com" };
+
+  it("has conservative, configurable upload and extraction limits", () => {
+    expect(resolveMediaLimits(parseEnv(BASE))).toEqual({
+      maxFileBytes: 1_073_741_824,
+      maxArchiveBytes: 2_147_483_648,
+      zipMaxEntries: 2_000,
+      zipMaxTotalBytes: 4_294_967_296,
+      zipMaxRatio: 100,
+      zipMaxDepth: 12,
+      zipMaxPathLength: 240,
+    });
+    const custom = parseEnv({ ...BASE, MEDIA_MAX_FILE_BYTES: "1000", MEDIA_ZIP_MAX_ENTRIES: "5", MEDIA_ZIP_MAX_RATIO: "20" });
+    expect(resolveMediaLimits(custom)).toMatchObject({ maxFileBytes: 1000, zipMaxEntries: 5, zipMaxRatio: 20 });
+  });
+
+  it("treats empty limit variables as 'use the default' (Compose passes empty strings)", () => {
+    expect(resolveMediaLimits(parseEnv({ ...BASE, MEDIA_MAX_FILE_BYTES: "", MEDIA_ZIP_MAX_ENTRIES: "" })).zipMaxEntries).toBe(2_000);
+  });
+
+  it("rejects a non-positive or non-numeric limit instead of silently disabling the protection", () => {
+    expect(issuesOf({ ...BASE, MEDIA_ZIP_MAX_ENTRIES: "0" }).map((i) => i.path)).toContain("MEDIA_ZIP_MAX_ENTRIES");
+    expect(issuesOf({ ...BASE, MEDIA_MAX_FILE_BYTES: "lots" }).map((i) => i.path)).toContain("MEDIA_MAX_FILE_BYTES");
+    expect(issuesOf({ ...BASE, MEDIA_ZIP_MAX_RATIO: "-5" }).map((i) => i.path)).toContain("MEDIA_ZIP_MAX_RATIO");
+  });
+
+  it("keeps the library OUTSIDE the publicly served media directory", () => {
+    const env = parseEnv({ ...BASE, LOCAL_STORAGE_DIR: "/data/media" });
+    const library = resolveLibraryStorageConfig(env).local;
+    expect(library.baseDir).not.toBe("/data/media");
+    expect(library.baseDir.replace(/\\/g, "/").startsWith("/data/media/")).toBe(false);
+    expect(resolveMediaLibraryDir(parseEnv({ ...BASE, MEDIA_LIBRARY_DIR: "/data/library" }))).toBe("/data/library");
+  });
+
+  it("never gives the library a fetchable URL", () => {
+    const local = resolveLibraryStorageConfig(parseEnv(BASE)).local;
+    expect(local.baseUrl).toBe("private://media-library");
+    const r2 = resolveLibraryStorageConfig(parseEnv({ ...BASE, ...R2 })).r2;
+    expect(r2?.publicUrl).toBeUndefined(); // even though the public media bucket has one
+  });
+
+  it("uses a separate private bucket for the library when configured, else the media bucket", () => {
+    expect(resolveLibraryStorageConfig(parseEnv({ ...BASE, ...R2 })).r2?.bucketName).toBe("public-media");
+    expect(resolveLibraryStorageConfig(parseEnv({ ...BASE, ...R2, R2_LIBRARY_BUCKET_NAME: "private-library" })).r2?.bucketName).toBe("private-library");
+  });
+
+  it("is local-only when R2 is incompletely configured, and passes an S3 endpoint override through", () => {
+    expect(resolveLibraryStorageConfig(parseEnv({ ...BASE, R2_ACCOUNT_ID: "acct" })).r2).toBeUndefined();
+    expect(resolveLibraryStorageConfig(parseEnv({ ...BASE, ...R2, R2_ENDPOINT: "http://127.0.0.1:9000" })).r2?.endpoint).toBe("http://127.0.0.1:9000");
+  });
+
+  it("finds ffprobe next to ffmpeg, or uses the explicit setting", () => {
+    expect(resolveFfprobePath(parseEnv(BASE))).toBe("ffprobe");
+    expect(resolveFfprobePath(parseEnv({ ...BASE, FFMPEG_PATH: "/opt/ff/bin/ffmpeg" })).replace(/\\/g, "/")).toBe("/opt/ff/bin/ffprobe");
+    expect(resolveFfprobePath(parseEnv({ ...BASE, FFMPEG_PATH: "C:\\ff\\bin\\ffmpeg.exe" })).toLowerCase()).toContain("ffprobe.exe");
+    expect(resolveFfprobePath(parseEnv({ ...BASE, FFMPEG_PATH: "/opt/ff/bin/ffmpeg", FFPROBE_PATH: "/usr/bin/ffprobe" }))).toBe("/usr/bin/ffprobe");
+    expect(resolveFfprobePath(parseEnv({ ...BASE, FFMPEG_PATH: "/opt/custom/transcoder" }))).toBe("ffprobe");
   });
 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 /**
  * Validates process.env once at startup so a missing/misconfigured
@@ -118,6 +118,26 @@ const envSchema = z
     API_PUBLIC_URL: emptyStringAsUndefined(z.string().url().optional()),
     // Defaults to relying on FFmpeg being on PATH — set only if it isn't.
     FFMPEG_PATH: z.string().default("ffmpeg"),
+    // ffprobe ships with FFmpeg; by default it is looked up next to FFMPEG_PATH (see resolveFfprobePath).
+    FFPROBE_PATH: emptyStringAsUndefined(z.string().optional()),
+    // Phase 5A media library. The library holds the immutable ORIGINALS and is PRIVATE: it never lives under
+    // LOCAL_STORAGE_DIR (which /media serves publicly) and is only ever read through authenticated API routes.
+    MEDIA_LIBRARY_DIR: emptyStringAsUndefined(z.string().optional()),
+    // Optional separate (private) bucket for the library; defaults to R2_BUCKET_NAME.
+    R2_LIBRARY_BUCKET_NAME: emptyStringAsUndefined(z.string().optional()),
+    // Override of the S3 endpoint (any S3-compatible service, e.g. a local MinIO for tests); R2's own endpoint is derived from R2_ACCOUNT_ID when this is empty.
+    R2_ENDPOINT: emptyStringAsUndefined(z.string().url().optional()),
+    // Upload and ZIP-extraction limits (bytes unless noted). Defaults are a conservative starting point, not platform facts.
+    MEDIA_MAX_FILE_BYTES: emptyStringAsUndefined(z.coerce.number().int().positive().default(1_073_741_824)),
+    MEDIA_MAX_ARCHIVE_BYTES: emptyStringAsUndefined(z.coerce.number().int().positive().default(2_147_483_648)),
+    MEDIA_ZIP_MAX_ENTRIES: emptyStringAsUndefined(z.coerce.number().int().positive().default(2_000)),
+    MEDIA_ZIP_MAX_TOTAL_BYTES: emptyStringAsUndefined(z.coerce.number().int().positive().default(4_294_967_296)),
+    MEDIA_ZIP_MAX_RATIO: emptyStringAsUndefined(z.coerce.number().int().positive().default(100)),
+    MEDIA_ZIP_MAX_DEPTH: emptyStringAsUndefined(z.coerce.number().int().positive().default(12)),
+    MEDIA_ZIP_MAX_PATH_LENGTH: emptyStringAsUndefined(z.coerce.number().int().positive().default(240)),
+    // Text import (TXT / CSV / XLSX): most rows and bytes one import may carry.
+    TEXT_IMPORT_MAX_ROWS: emptyStringAsUndefined(z.coerce.number().int().positive().default(5_000)),
+    TEXT_IMPORT_MAX_BYTES: emptyStringAsUndefined(z.coerce.number().int().positive().default(5_242_880)),
     // Phase 1 scheduling reliability (apps/worker/src/scheduling).
     // A scheduled item whose time passed by MORE than this many minutes is
     // held (never auto-published): protects against posting stale content
@@ -366,7 +386,7 @@ export function resolveLocalStorageDir(env: Env): string {
  * R2 config should still count as "configured".
  */
 export interface AssetStorageEnvConfig {
-  r2?: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; publicUrl?: string };
+  r2?: { accountId: string; accessKeyId: string; secretAccessKey: string; bucketName: string; publicUrl?: string; endpoint?: string };
   local: { baseDir: string; baseUrl: string };
 }
 
@@ -379,9 +399,51 @@ export function resolveAssetStorageConfig(env: Env): AssetStorageEnvConfig {
           secretAccessKey: env.R2_SECRET_ACCESS_KEY,
           bucketName: env.R2_BUCKET_NAME,
           publicUrl: env.R2_PUBLIC_URL,
+          endpoint: env.R2_ENDPOINT,
         }
       : undefined;
   return { r2, local: { baseDir: resolveLocalStorageDir(env), baseUrl: `${resolveApiPublicUrl(env)}/media` } };
+}
+
+/** Where the PRIVATE media library keeps originals and derivatives when no object store is configured. Never served statically. */
+export function resolveMediaLibraryDir(env: Env): string {
+  return env.MEDIA_LIBRARY_DIR ?? join(tmpdir(), "socialith-media-library");
+}
+
+/**
+ * Storage for the media library. Same backends as resolveAssetStorageConfig, with two differences that keep it
+ * private: R2 never carries a public URL (library bytes are only streamed by authenticated API routes), and the bucket
+ * can be a separate one (R2_LIBRARY_BUCKET_NAME). Local files live outside the statically served media directory.
+ */
+export function resolveLibraryStorageConfig(env: Env): AssetStorageEnvConfig {
+  const base = resolveAssetStorageConfig(env);
+  return {
+    r2: base.r2 ? { ...base.r2, bucketName: env.R2_LIBRARY_BUCKET_NAME ?? base.r2.bucketName, publicUrl: undefined } : undefined,
+    // baseUrl is deliberately not fetchable: nothing may hand out a direct URL to a library file
+    local: { baseDir: resolveMediaLibraryDir(env), baseUrl: "private://media-library" },
+  };
+}
+
+/** ffprobe: the explicit FFPROBE_PATH, else the binary next to FFMPEG_PATH, else "ffprobe" on PATH. */
+export function resolveFfprobePath(env: Env): string {
+  if (env.FFPROBE_PATH) return env.FFPROBE_PATH;
+  const ffmpeg = env.FFMPEG_PATH;
+  if (ffmpeg === "ffmpeg") return "ffprobe";
+  const base = basename(ffmpeg);
+  return /^ffmpeg(\.exe)?$/i.test(base) ? join(dirname(ffmpeg), base.replace(/ffmpeg/i, "ffprobe")) : "ffprobe";
+}
+
+/** The configured upload / extraction limits, shaped like @socialith/media-pack's MediaLimits. */
+export function resolveMediaLimits(env: Env) {
+  return {
+    maxFileBytes: env.MEDIA_MAX_FILE_BYTES,
+    maxArchiveBytes: env.MEDIA_MAX_ARCHIVE_BYTES,
+    zipMaxEntries: env.MEDIA_ZIP_MAX_ENTRIES,
+    zipMaxTotalBytes: env.MEDIA_ZIP_MAX_TOTAL_BYTES,
+    zipMaxRatio: env.MEDIA_ZIP_MAX_RATIO,
+    zipMaxDepth: env.MEDIA_ZIP_MAX_DEPTH,
+    zipMaxPathLength: env.MEDIA_ZIP_MAX_PATH_LENGTH,
+  };
 }
 
 /** Real, credential-free by construction: this API's own callback route, not something that needs to be registered separately unless the platform app config points elsewhere. */

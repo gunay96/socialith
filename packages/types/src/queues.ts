@@ -62,6 +62,8 @@ export const QUEUE_NAMES = {
   // Phase 2: Upload-Post provider work (profile sync, hand-off/drift/status sweep,
   // webhook-triggered reconciliation) - apps/worker/src/upload-post.
   UPLOAD_POST: "upload-post",
+  // Phase 5A: ZIP extraction and media analysis (apps/worker/src/media).
+  MEDIA_PROCESSING: "media-processing",
   TOKEN_REFRESH: "token-refresh",
   TOKEN_REFRESH_SCAN: "token-refresh-scan",
   NOTIFICATIONS: "notifications",
@@ -154,3 +156,21 @@ export type UploadPostJobData =
 
 /** Deterministic BullMQ job id for an on-demand Upload-Post sync (one in flight at a time). */
 export const UPLOAD_POST_MANUAL_SYNC_JOB_ID = "upload-post-manual-sync";
+
+/**
+ * Payload for QUEUE_NAMES.MEDIA_PROCESSING jobs (Phase 5A). The OperationTask row is the source of truth for progress and
+ * outcome; the job only says what to do and to what.
+ *  - EXTRACT_ZIP     scan + safely extract a pack's archive, then analyze every extracted file
+ *  - ANALYZE_ASSET   probe one stored asset and make its thumbnail
+ */
+export type MediaProcessingJobData =
+  | { kind: "EXTRACT_ZIP"; taskId: string; packId: string }
+  | { kind: "ANALYZE_ASSET"; taskId: string; assetId: string };
+
+/**
+ * One deterministic BullMQ job id per task: enqueuing the same task twice (a double click, a retry of the request, a
+ * recovery sweep) is a no-op instead of a second job. Shared by the producer (apps/api) and the worker's recovery.
+ */
+export function mediaProcessingJobId(taskId: string): string {
+  return `media-task-${taskId}`;
+}
