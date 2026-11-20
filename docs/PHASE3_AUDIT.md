@@ -73,3 +73,12 @@ Page Network, AI Studio, the Artist/Music/Campaign model (Phase 7), the creator 
 2. **Default for `requireApproval`** on organizations that have never opened Publishing Settings (see decision 4).
 3. **Self-approval:** the setting `allowSelfApproval` defaults to **true** so a one-person agency can operate; turn it off to force a second person. Every approval records who approved.
 4. Confirm the interpretation in decision 6.
+
+## 6. Findings during implementation (added after the build)
+
+The audit above was written before any code. Building and testing found four things worth recording; they are fixed and covered by tests (`PUBLISHING_TESTING.md` §3):
+
+1. A SQL three-valued-logic trap: negating a condition on the nullable `exception` column silently dropped rows with no exception (repetition guard, calendar). All such conditions now handle NULL explicitly.
+2. An approval withdrawn at reschedule time left a publication "scheduled"; it now returns to the plan state with its approval.
+3. An unreadable HTTP 200 answer to a publish left the provider row `PENDING`; it is now an explicit unknown outcome (no double-publish risk ever existed — the retry already asked the provider first).
+4. The blanket API rate limit (300 requests/minute/IP) is a production protection and was left untouched; the test suite starts one app per describe block instead.
