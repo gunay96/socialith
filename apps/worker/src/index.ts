@@ -15,6 +15,8 @@ import { processAnalyticsSync } from "./processors/analytics-sync.processor.js";
 import { AiProviderRateLimitError } from "./ai/provider.js";
 import { processAnalyticsSyncScan } from "./processors/analytics-sync-scan.processor.js";
 import { processTokenRefresh } from "./processors/token-refresh.processor.js";
+import { processMediaJob } from "./media/process.js";
+import { TaskReporter } from "./tasks/reporter.js";
 import { processTokenRefreshScan } from "./processors/token-refresh-scan.processor.js";
 import { closeScheduledProducers } from "./scheduled/producers.js";
 import { createBullMqSchedulingPort } from "./scheduling/queue-port.js";
@@ -312,6 +314,29 @@ const ensureTimer = setInterval(
 );
 ensureTimer.unref();
 
+// Phase 5A: ZIP extraction and media analysis (apps/worker/src/media). Two at a time: ffprobe / thumbnails / hashing are
+// CPU- and disk-heavy and a pack can hold thousands of files. A task's progress is persisted by TaskReporter
+// (operation_tasks), so it survives a page refresh and a worker restart; extraction is idempotent per entry, so a
+// job that BullMQ re-runs after a crash or a stall continues instead of repeating work.
+const mediaProcessingQueue = new Queue(QUEUE_NAMES.MEDIA_PROCESSING, { connection });
+const mediaProcessingWorker = new Worker(QUEUE_NAMES.MEDIA_PROCESSING, (job) => processMediaJob(job), { connection, concurrency: 2 });
+
+mediaProcessingWorker.on("failed", (job, err) => {
+  logger.error({ jobId: job?.id, attemptsMade: job?.attemptsMade, err }, "media-processing job failed");
+  // BullMQ also fails a job outright when it stalled more than allowed, whatever attemptsMade says
+  if (job && (isFinalAttempt(job) || /stalled/i.test(err.message))) {
+    const data = job.data as { kind: "EXTRACT_ZIP" | "ANALYZE_ASSET"; taskId: string; packId?: string };
+    const message = err.message.slice(0, 500);
+    void new TaskReporter(data.taskId)
+      .fail({ code: "PROCESSING_FAILED", message, remedy: "Try again. If it keeps failing, ask an administrator to check the worker logs." })
+      .catch((updateErr) => logger.error({ taskId: data.taskId, updateErr }, "media-processing: failed to record the final FAILED state"));
+    if (data.kind === "EXTRACT_ZIP" && data.packId) {
+      prisma.mediaPack
+        .updateMany({ where: { id: data.packId, status: "PROCESSING" }, data: { status: "FAILED", errorCode: "PROCESSING_FAILED", errorMessage: message, completedAt: new Date() } })
+        .catch((updateErr) => logger.error({ packId: data.packId, updateErr }, "media-processing: failed to mark the pack FAILED"));
+    }
+  }
+});
 // /health reports ready only once every worker is connected — a partial
 // start (e.g. one queue's Redis subscription still pending) should not
 // report healthy.
@@ -328,6 +353,7 @@ const readiness = {
   tokenRefreshScan: false,
   schedulingReconcile: false,
   uploadPost: false,
+  mediaProcessing: false,
 };
 function isReady(): boolean {
   return (
@@ -342,7 +368,8 @@ function isReady(): boolean {
     readiness.tokenRefresh &&
     readiness.tokenRefreshScan &&
     readiness.schedulingReconcile &&
-    readiness.uploadPost
+    readiness.uploadPost &&
+    readiness.mediaProcessing
   );
 }
 
@@ -401,6 +428,11 @@ schedulingReconcileWorker.on("ready", () => {
   logger.info("scheduling-reconcile worker ready and connected to Redis");
 });
 
+mediaProcessingWorker.on("ready", () => {
+  readiness.mediaProcessing = true;
+  logger.info("media-processing worker ready and connected to Redis");
+});
+
 uploadPostWorker.on("ready", () => {
   readiness.uploadPost = true;
   logger.info("upload-post worker ready and connected to Redis");
@@ -448,6 +480,8 @@ async function shutdown(signal: string) {
     tokenRefreshScanQueue.close(),
     uploadPostWorker.close(),
     uploadPostQueue.close(),
+    mediaProcessingWorker.close(),
+    mediaProcessingQueue.close(),
     schedulingReconcileWorker.close(),
     schedulingReconcileQueue.close(),
     schedulingPort.close(),
