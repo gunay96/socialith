@@ -4,10 +4,10 @@ How to run the Publishing Center day to day, what the statuses mean, and what to
 
 ## 1. Before anything is published for real
 
-1. **Turn approval on.** Publishing Center → *Publishing Settings* → *Require approval* (admin). Until then an organization behaves as before Phase 3 and publications can be scheduled straight from draft.
+1. **Approval is already on** (product default, nothing to save): every destination must be approved before it can be scheduled. Switching it off is an explicit choice in *Publishing Settings* (admin) and is audited. Check *Publishing Settings* to confirm who may approve their own work (owner: yes; admin: no, by default).
 2. **Check the destinations.** *Account Selection* shows every destination with READY / NOT READY and the reason (disconnected, needs reconnecting in Upload-Post, profile blocked, …). Fix those in Upload-Post, then *Upload-Post → Sync now*.
 3. **Real publishing needs a separate, explicit go-ahead naming a designated test account.** Nothing in Phase 3 publishes to a real account; the tests use a contract double. Follow the checklist in `PUBLISHING_TESTING.md` §6 for the first real post.
-4. Leave **hand-off to the Upload-Post scheduler off** until a test post proved it (`UPLOAD_POST_SETUP.md` §8).
+4. Leave **hand-off to the Upload-Post scheduler off**. It needs a separate live verification and the owner's explicit approval, and two environment switches (`UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED` **and** `UPLOAD_POST_HANDOFF_OWNER_APPROVED`) — one alone refuses to boot (`UPLOAD_POST_SETUP.md` §8).
 
 ## 2. The daily flow
 
@@ -51,6 +51,8 @@ A `Failed` publication whose last attempt was an **unknown outcome** (timeout, u
 | **Daily cap / spacing reached** | scheduling is refused with the date and the cap; pick another day or raise the cap in settings. |
 | **TikTok track is not attached** | a *warning* by default (the post goes out without it, and the reason is stored); tick **Require the track** on that destination to make it blocking. Verify the track's mapping and confirm its rights (admin) on the Sounds page. |
 | **A publication is `Queued` for long** | the publishing worker is not consuming (see §5). Nothing is lost: a job lost with Redis is re-created from the database by the reconciler. |
+| **An admin gets "Admins cannot approve what they submitted themselves"** | the default policy: the owner or another admin approves it (or the owner allows admin self-approval in Publishing Settings; every self-approval is audited). |
+| **Platform checks say "NOT FULLY VALIDATED - media UNVERIFIED"** | the file's dimensions / duration / size are not recorded, so those limits were **not** checked (there is no media probing yet, TD-49); the account, provider and caption checks passed. Decide with that in mind - the platform may still refuse the file. |
 | **Everything shows `Stale` after an outage** | expected and safe: nothing was published late. Review, then publish now or reschedule each (or the ones that still matter). |
 
 ## 5. Health and recovery
@@ -69,8 +71,9 @@ Never edit the database by hand to "unstick" a publication. Every state is deriv
 
 | Setting | Default for a new row | Effect |
 |---|---|---|
-| Require approval | on (an organization that never saved settings: off) | every destination must be approved before it can be scheduled, through any path |
-| Allow self-approval | on | off = a different admin must approve |
+| Require approval | **on** (also for an organization that never saved settings) | every destination must be approved before it can be scheduled or published, through any path; switching it off is explicit and audited |
+| Owner may approve own submissions | on | a self-approval is always audited |
+| Admins may approve own submissions | **off** | off = the owner or another admin must approve; a creator can never approve |
 | Schedule automatically once approved | off | at the planned time only; campaign can override |
 | Timezone | Europe/Istanbul | entry/display and the meaning of "same day" |
 | Minimum lead time | 10 min | nothing is scheduled closer to now |

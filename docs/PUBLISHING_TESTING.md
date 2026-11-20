@@ -10,16 +10,17 @@ Three tiers, kept apart so one is never mistaken for another:
 
 | Suite | Tests | Needs |
 |---|---|---|
-| `@socialith/publishing` (pure rules) | **72** | nothing |
+| `@socialith/publishing` (pure rules, incl. approver policy and media verification) | **87** | nothing |
+| `@socialith/config` (incl. the hand-off owner-approval guard) | 22 | nothing |
 | `@socialith/web` (date/time + error helpers) | 8 | nothing |
 | API unit | 237 (+1 POSIX-only skip) | nothing |
 | Worker unit | 75 | nothing |
-| API integration — `publishing-center.integration.test.ts` | **45** | MySQL + Redis |
-| Worker integration — `publishing-center.integration.test.ts` | **13** | MySQL + Redis |
+| API integration — `publishing-center.integration.test.ts` | **51** | MySQL + Redis |
+| Worker integration — `publishing-center.integration.test.ts` | **15** | MySQL + Redis |
 | Worker integration — additions to `upload-post-publish` (gate, own text, required track, invalid responses) / `upload-post-sweep` (per-target hand-off, drift, cancel, gate, mandatory track) | 11 / 5 | MySQL |
-| Whole monorepo, integration (MySQL 8.4.13 + Redis) | api **125**, worker **110** | |
+| Whole monorepo, integration (MySQL 8.4.13 + Redis) | api **131**, worker **112** | |
 
-Phase 1 / Phase 2 suites (scheduling reconciler, sweep, publish, sync, API) run **unchanged** — the one fixture helper that moves a content's *and* its targets' times (a real reschedule does both since Phase 3) is the only edit; no assertion was changed.
+Phase 1 / Phase 2 suites (scheduling reconciler, sweep, publish, sync, API) keep **every assertion**. Two fixture changes only, both explained in the files: a helper that moves a content's *and* its targets' times (a real reschedule does both since Phase 3), and — because approval is now required by default — the organizations in tests about scheduling *mechanics* explicitly save the opt-out; the defaults themselves have their own tests (below).
 
 ## 2. The requested test areas → where they are proven
 
@@ -39,6 +40,11 @@ Phase 1 / Phase 2 suites (scheduling reconciler, sweep, publish, sync, API) run 
 | Timeout behaviour | Phase 2: timeout → unknown outcome → the provider is asked before any resend (passing) |
 | Status reconciliation | Phase 2 poll/sweep/webhook paths (passing) + new: held/cancelled targets do not keep a content open (reconciler roll-up, `finalize`) |
 | Platform validation | 26 unit tests (every rule, per platform, boundaries, multiple problems at once) + API: structured 422 list, account/provider problems, music (warning vs required), limits |
+| **Approval required by default** | API: a brand-new organization (no row saved, nothing saved by the test) cannot schedule from draft — through the Publishing Center **or** the older content API; overview/settings report the default; worker: an organization with no row is gated exactly like one that requires approval (held, nothing reaches a provider), and goes out once approved; an explicitly saved opt-out is honoured and a later unrelated settings change never re-enables or disables it |
+| **Role-based self-approval + audit** | unit (`policy.test.ts`, 9): every role × self/other × both switches, CREATOR never, unknown submitter; API: OWNER self-approves and a `PUBLICATION_SELF_APPROVED` audit row + `selfApproval` event metadata exist; ADMIN refused by default (403, `PUBLICATION_APPROVAL_DENIED` audited, state unchanged) and a different approver's approval is not a self-approval; both switches are configurable and each approval is attributed; EDITOR refused |
+| **Automatic publishing only after approval** | API: with auto-schedule on, submitting schedules nothing and no job exists until the approval; the approval schedules at the planned time; worker: unapproved/changed targets are held, never fired |
+| **Media validation never pretends** | unit (7): VERIFIED / PARTIAL / UNVERIFIED / NONE, unknown facts named, `fullyValidated` false while anything is unknown, a known violation still an error, account checks still active; API: unknown metadata → `fullyValidated: false` with the unknown facts, known metadata → VERIFIED, the detail page returns null facts as "unknown", a disconnected account still blocks |
+| **Hand-off needs the owner switch** | config: `…_HANDOFF_ENABLED=true` alone refuses to boot (variable named, reason given); the confirmation alone enables nothing; both together are accepted; empty strings are the safe default |
 | Multi-account destination isolation | API: one content → three destinations with independent states and approvals; org B cannot read, act on, or use org A's publications and destinations (404); worker: the gate is per destination |
 
 ## 3. Bugs the tests found (and the fixes)
@@ -54,7 +60,8 @@ Phase 1 / Phase 2 suites (scheduling reconciler, sweep, publish, sync, API) run 
 
 - **Nothing was published to any real account.** Every provider response is the contract double's reading of the documentation; a green suite proves our handling of the documented contract, not live behaviour.
 - **Platform thresholds** for video duration, file size and aspect ratio are assumptions (see `PUBLISHING_WORKFLOW.md` §7); caption/title/hashtag limits come from the Phase 2 mapping of the provider documentation. No Instagram, YouTube or TikTok publication has been observed live.
-- **Media facts**: dimensions and duration are not extracted from uploads (only `sizeBytes` is recorded), so those checks mostly say "could not be checked" until asset metadata is filled in (TD-49).
+- **Media facts**: dimensions and duration are not extracted from uploads (only `sizeBytes` is recorded). The system says so — media is shown as UNVERIFIED / PARTIAL and a publication is never reported fully validated — until Media Pack processing records them (TD-49).
+- **The CREATOR role does not exist yet** (Phase 8): "a creator can never approve" is enforced and unit-tested in the policy function, but there is no creator user to test through the API.
 - **Hand-off against the live provider** (job edit/cancel semantics, media fetch timing for scheduled jobs) is still unverified live (`UPLOAD_POST_API_MAPPING.md` §6).
 - The browser check was done once, by hand, against the real API + MySQL + Redis with seeded data; there is no automated browser test.
 

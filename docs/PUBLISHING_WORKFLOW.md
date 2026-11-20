@@ -32,7 +32,7 @@ The twelve are exhaustive and reachable (a unit test enumerates every combinatio
 | Action | Role | Allowed in state |
 |---|---|---|
 | create / edit / submit / withdraw / schedule / reschedule / unschedule / hold / release / cancel / reopen / retry | EDITOR+ | see below |
-| approve / reject | **ADMIN+** (reject needs a reason; self-approval switchable) | READY_FOR_REVIEW |
+| approve / reject | **OWNER or ADMIN** (reject needs a reason; self-approval rules in §4) — never EDITOR, VIEWER or CREATOR | READY_FOR_REVIEW |
 | change Publishing Settings, campaign auto-schedule | ADMIN+ | — |
 | read everything | any role | — |
 
@@ -42,15 +42,32 @@ Every transition is a **compare-and-set** against the state it was decided on; a
 
 ## 4. Approval
 
-- **Default:** an organization that never saved Publishing Settings behaves exactly as before Phase 3 (approval not required). **Require approval** is switched on in Publishing Settings — recommended; it is enforced for *every* way a publication can reach a provider: the Publishing Center, the older `/content/:id/schedule` and publish-now (only APPROVED destinations are scheduled; none approved → 409), the scheduler, manual retry, and the hand-off to Upload-Post's scheduler.
+- **Default: approval is REQUIRED** — for new organizations and for organizations that never saved a preference (nothing needs to be saved for it to apply). An **explicitly saved** preference is always honoured and never silently changed: switching approval off is a deliberate, audited setting in Publishing Settings, and later unrelated changes do not re-enable it. It is enforced for *every* way a publication can reach a provider: the Publishing Center, the older `/content/:id/schedule` and publish-now (only APPROVED destinations are scheduled; none approved → 409), the scheduler, manual retry, and the hand-off to Upload-Post's scheduler.
 - **History:** append-only `publication_events` — type, from/to state, actor (null = the system), reason, metadata, time — plus audit-log rows. The detail page shows submitter, approver, timestamps, rejection reason, and the content revisions reviewed.
 - **Pinned to what was reviewed.** Approving stores a canonical payload (platform, effective text, title, asset ids, track). If any of it differs when scheduling or when the worker is about to call a provider, the approval is withdrawn (`INVALIDATED` event; an already-scheduled publication goes back to the plan state with it) and nothing is published. Editing the destination's text through the Publishing Center does the same immediately.
-- **Self-approval** is allowed by default (a one-person agency must be able to operate); switch it off to require a second admin. Either way the approver's identity is recorded.
+- **Who may approve, and may they approve their own submission** (`evaluateApprover`, one pure function, unit-tested):
+
+  | Role | Approve others' work | Approve their own submission |
+  |---|---|---|
+  | **OWNER** | yes | **yes by default** (`ownerSelfApproval`, configurable per organization) |
+  | **ADMIN** | yes | **no by default** (`adminSelfApproval`, configurable per organization) |
+  | **CREATOR** (Phase 8 role — rule already enforced) | never | **never**, whatever the switches say |
+  | EDITOR, VIEWER | never | never |
+
+  **A self-approval always creates an audit event**, independent of the policy: an audit-log row `PUBLICATION_SELF_APPROVED` (plus `PUBLICATION_APPROVED`) and the publication-history `APPROVED` event carries `selfApproval: true` and the approver's role. A refused attempt is audited as `PUBLICATION_APPROVAL_DENIED`.
 - **Review validates the content** (account, media, text, track, repetition), not the time: a plan that has since gone stale never blocks a review. The time, daily cap and spacing are checked when scheduling.
 
 ### Automatic scheduling after approval
 
-Campaign setting (`Campaign.autoScheduleOnApproval`: inherit / on / off) over the organization setting. When on, approving schedules the publication **at the time a person already planned for it** — never an invented time — and only if it passes the full scheduling validation; otherwise it stays APPROVED and the reasons are returned and shown. This is the previously selected model (see `UPLOAD_POST_INTEGRATION.md` §6): Socialith's database owns the schedule, Upload-Post may execute after an optional, bounded hand-off (off by default), and nothing publishes without the required human approval.
+Campaign setting (`Campaign.autoScheduleOnApproval`: inherit / on / off) over the organization setting. When on, approving schedules the publication **at the time a person already planned for it** — never an invented time — and only if it passes the full scheduling validation; otherwise it stays APPROVED and the reasons are returned and shown. **Automatic publishing never means publishing unapproved content**: the scheduler holds an unapproved or changed publication instead of firing it.
+
+### The confirmed publishing architecture (owner decision)
+
+- Socialith's **database is the source of truth** and Socialith **owns the primary publishing schedule**.
+- **Approved** content is submitted automatically **at its scheduled time** by Socialith's own queue.
+- **Upload-Post is the primary external publishing provider.**
+- **Upload-Post scheduling hand-off is disabled by default.** It may be enabled only after a **separate live verification** and the **owner's explicit approval** — enforced in configuration: `UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED=true` alone refuses to boot; the deliberate second switch `UPLOAD_POST_HANDOFF_OWNER_APPROVED=true` must be set as well (`UPLOAD_POST_SETUP.md` §8).
+- **A publication target never has two scheduling owners** (ownership guards, §5).
 
 ## 5. Scheduling — one owner per target, on the existing engine
 
@@ -82,11 +99,15 @@ Run on create (as a hint), submit, approve, schedule, retry, and as a dry-run. E
 | Aspect ratio | Instagram feed images 4:5 … 1.91:1 → ERROR; vertical 9:16 recommended for short video → WARNING | ERROR / WARNING | **not verified live** |
 | Duration | Instagram 3 s … 900 s (ERROR), > 90 s Reels eligibility (WARNING); TikTok ≤ 3600 s (ERROR); YouTube Shorts note | ERROR / WARNING | **assumed — not verified live; adjust in `PLATFORM_RULES`** |
 | File size | TikTok ≤ 4 GB (ERROR); Instagram > 300 MB (WARNING) | ERROR / WARNING | **assumed — not verified live** |
-| Unknown media facts | dimensions / duration / size not recorded on the asset → one WARNING "could not be checked" (never silently skipped) | WARNING | — |
+| Unknown media facts | dimensions / duration / size not recorded on the asset → one WARNING naming exactly what was **not** checked; the result is `ok` (nothing known to be wrong) but **never `fullyValidated`**, and the media is reported `PARTIAL` / `UNVERIFIED` | WARNING | TD-49 |
 | Music | only TikTok attaches a track; needs a mapping that is VERIFIED_AVAILABLE, **rights confirmed by a person**, verified ≤ 30 days, and an account with the `music` capability. Missing → WARNING (the post goes out without it). **"Require the track"** makes each condition an ERROR and the worker fails the publication before any provider call. Other platforms: INFO | WARNING / ERROR | Phase 2 rules |
 | Scheduled time | present when scheduling; not in the past; ≥ minimum lead (default 10 min); ≤ 365 days (provider limit) | ERROR | provider docs |
 | Limits per destination | daily cap (default 3, organization-local day) and minimum spacing (default 60 min), counted over scheduled, in-flight and published | ERROR | organization policy |
 | Repetition | the same asset with ≥ 85 % similar text (word 3-grams) on more than 1 destination of one platform: the first created keeps its text, each later one is blocked (or warned / off) until it has its own caption | ERROR / WARNING | PRD guardrail 2 |
+
+### Media is never reported as validated while its metadata is unknown
+
+Every validation returns `ok` (no error), `media` (`VERIFIED` / `PARTIAL` / `UNVERIFIED` / `NONE`, with the `known` and `unknown` facts) and `fullyValidated` (= `ok` **and** media `VERIFIED`). The dashboard shows **NOT FULLY VALIDATED · media UNVERIFIED** with the missing facts (approval cards, new-publication results, publication detail; each file on the detail page lists its known facts and marks the unknown ones "unknown — not verified"). What *is* known is always enforced (a known 2-second Reel is refused even if the dimensions are unknown), and the account, provider and platform-capability checks stay fully active. Until Media Pack processing extracts dimensions and duration (Phase 5, TD-49) most uploads will honestly show as not fully validated; approval is still possible — the approver sees this plainly.
 
 **What is and is not verified:** the rules above are unit-tested exhaustively (`packages/publishing`), the API behaviour is integration-tested, and the Phase 2 mapping of caption/title limits was read from the provider documentation. Duration, file-size and aspect thresholds are **conservative assumptions, not live-verified**; none of Instagram/YouTube/TikTok publishing has been observed live (the owner's Upload-Post trial account has no connected social account yet). Treat a green validation as "passes Socialith's checks", not as a guarantee that a platform will accept the post.
 

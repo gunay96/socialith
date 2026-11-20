@@ -24,6 +24,7 @@ UPLOAD_POST_WEBHOOK_SECRET=               # optional, see step 5
 UPLOAD_POST_ORGANIZATION_ID=              # only if this deployment has more than one organization
 UPLOAD_POST_SYNC_INTERVAL_MINUTES=30
 UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED=false   # leave false until step 8
+UPLOAD_POST_HANDOFF_OWNER_APPROVED=false      # the deliberate second switch for step 8
 ```
 
 Then recreate the services that read it:
@@ -74,7 +75,7 @@ Off by default: Socialith fires every scheduled publication itself. To let Uploa
 
 1. Verify on a **test destination**, with explicit approval for a real test post, that a handed-off job is created, edited when you reschedule in Socialith, cancelled when you unschedule, and published once (`UPLOAD_POST_TESTING.md` §5).
 2. Use durable media URLs (local storage or R2 behind a public bucket). Presigned R2 URLs expire in about an hour, so the sweep refuses to hand such targets off.
-3. Set `UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED=true`, optionally `UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS`, recreate `worker`.
+3. Only with your **explicit approval** (product decision): set **both** `UPLOAD_POST_SCHEDULE_HANDOFF_ENABLED=true` **and** `UPLOAD_POST_HANDOFF_OWNER_APPROVED=true` (optionally `UPLOAD_POST_SCHEDULE_HANDOFF_WINDOW_HOURS`), recreate `api` and `worker`. Setting `…_ENABLED=true` alone refuses to boot, naming why — the second variable is the recorded confirmation that the separate live verification of step 1 was done and the owner approved. Approved content is still submitted by Socialith's own queue unless a target is handed off inside the window; a target never has two scheduling owners.
 Turning it off again is safe: the sweep releases provider-owned jobs back to Socialith as targets change, and a hand-off in doubt always resolves to Socialith owning the target.
 
 ## 9. Troubleshooting
