@@ -59,11 +59,11 @@ Branch `phase5-media-pack-ai-studio` (from main `a5f2470`). One sub-phase at a t
 | Real-FFmpeg render suite (96 tests incl. fonts) on Debian 12 (FFmpeg 5.1.9, the worker image's base), Ubuntu 24.04 (6.1.1), Ubuntu 26.04 (8.0.1) | all green on all three |
 | Debian 12: worker integration (148 incl. 16 render tests), API render integration (16) | green |
 | Production builds of the worker and API booted on Debian 12 (node 20, FFmpeg 5.1.9): `media-render worker ready`, `/api/renders` mounted and authenticated | yes (a simulation of the image build in a chroot) |
-| Docker image builds | **not run locally** (Docker Desktop could not be started); the CI `images` job is the check |
+| Docker image builds | not run locally (Docker Desktop could not be started); the CI `images` job built them successfully |
 | Windows (FFmpeg 9.0.1): unit tests including the render suite | see `PHASE5C_ACCEPTANCE.md` |
 | Browser run (real API, worker, web) | render started from the UI, real output played, real progress on a 90 s clip, cancel, duplicate refusal |
 | Real Cloudflare R2 | **NOT verified** (mandatory before production, owner decision) |
-| GitHub Actions (3 checks) | see `PHASE5C_ACCEPTANCE.md` |
+| GitHub Actions (3 checks) | hygiene, verify, images all green on `8d65140` |
 
 ## Decisions that still need the owner
 

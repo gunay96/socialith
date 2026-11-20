@@ -17,9 +17,9 @@ A person can now choose a picture or video, an approved text and a page (or page
 | Output saved in the Media Library as a READY asset | **Done** |
 | Available to the **Publishing Center** | **Not done**: it cannot select Media Library files yet (section 5, decision 1) |
 | Linux real-FFmpeg runs, not only Windows | **Done**: Debian 12 (FFmpeg 5.1.9), Ubuntu 24.04 (6.1.1), Ubuntu 26.04 (8.0.1) |
-| Docker image builds | **Not run locally** (Docker Desktop could not be started); a simulation of the worker and API builds ran on Debian 12. CI `images` job is the check |
+| Docker image builds | **Not run locally** (Docker Desktop could not be started); a simulation of the worker and API builds ran on Debian 12, and the CI `images` job then built the real images successfully |
 | Real Cloudflare R2 | **NOT verified** (mandatory before production, as decided) |
-| GitHub Actions (hygiene, verify, images) | see section 9 |
+| GitHub Actions (hygiene, verify, images) | **all three green** on `8d65140` (section 9); that includes the real Docker image builds |
 
 ## 3. The brief, item by item
 
@@ -60,7 +60,7 @@ Full description: `MEDIA_RENDERING.md`. In brief: `@socialith/studio` computes t
 
 **Not verified**
 * **Real Cloudflare R2.** Everything ran on the local storage implementation. Mandatory before production; development was not blocked, as decided (TD-61).
-* **Docker image builds.** Docker Desktop could not be started here (its Windows service needs administrator rights). I built and booted the production worker and API in a Debian 12 chroot (the worker image's base: node 20, FFmpeg 5.1.9, the font packages): `media-render worker ready`, `/api/renders` mounted. That is a simulation, not the Dockerfile. The CI `images` job builds the real images.
+* **Docker image builds.** Docker Desktop could not be started here (its Windows service needs administrator rights). I built and booted the production worker and API in a Debian 12 chroot (the worker image's base: node 20, FFmpeg 5.1.9, the font packages): `media-render worker ready`, `/api/renders` mounted. That is a simulation, not the Dockerfile. The CI `images` job then built the real images successfully (run 44770619152), so this is verified in CI but not on this machine.
 * **Retry by clicking in the browser and the look of a failed render.** Retry and failure are covered by API and worker tests; I did not click through them.
 * **Browser preview against the rendered file pixel by pixel.** The file is measured against the plan; the browser drawing follows the same plan and was compared by eye on one composition. No automated browser-to-file comparison exists.
 * **Phone layout.** The application shell's sidebar does not collapse (TD-65, older); the new pages have no overflow of their own.
@@ -110,7 +110,7 @@ Additive migration `20261124100000_media_render_jobs`: new table `media_render_j
 
 ## 9. GitHub Actions
 
-GITHUB_RESULT
+Pushed to `phase5-media-pack-ai-studio` (fast-forward from `8f6f371`, no force). For the code and documentation commit `8d65140` GitHub Actions run 44770619152 finished with all three checks **successful**: `hygiene` (including the full-history scan), `verify` (lint, typecheck, unit, migrations, drift check, API and worker integration, build, with real FFmpeg and fonts on the runner) and `images` (the three Docker images build). That run is the first real Docker build of the 5C code. This report was added in a later documentation-only commit.
 
 ## 10. Technical debt
 
