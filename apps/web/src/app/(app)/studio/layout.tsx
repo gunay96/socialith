@@ -10,6 +10,7 @@ const TABS = [
   { href: "/studio/queue", label: "Processing Queue" },
   { href: "/studio/texts", label: "Text Library" },
   { href: "/studio/recipes", label: "Recipes" },
+  { href: "/studio/renders", label: "Rendering" },
 ];
 
 export default function StudioLayout({ children }: { children: React.ReactNode }) {

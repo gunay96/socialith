@@ -30,7 +30,7 @@ export default function RecipesPage() {
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <p className="max-w-3xl text-sm text-muted">
-        A recipe says how a picture or video and an approved text are put together: where the text sits, how it looks and moves, and what is exported. Settings a recipe leaves empty come from the page, its group or its category. Here you define and preview the composition; making the final file is a later step.
+        A recipe says how a picture or video and an approved text are put together: where the text sits, how it looks and moves, and what is exported. Settings a recipe leaves empty come from the page, its group or its category. Here you define and preview the composition; the final file is made in the Rendering tab.
       </p>
       {message && <Banner tone={message.tone}>{message.text}</Banner>}
 
