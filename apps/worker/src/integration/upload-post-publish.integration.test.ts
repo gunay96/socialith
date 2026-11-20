@@ -156,6 +156,49 @@ suite("Upload-Post publishing (real MySQL, contract double)", () => {
     expect(sent[0]!.headers["idempotency-key"]).toBe(sent[1]!.headers["idempotency-key"]);
   });
 
+  describe("invalid provider responses are an UNKNOWN outcome — never a success, never a blind resend", () => {
+    const upload = (m: string, p: string) => m === "POST" && p === "/upload";
+    for (const [label, body] of [["an HTML error page", "<html><body>502 Bad Gateway</body></html>"], ["an empty answer", ""], ["JSON without any id", { success: true }]] as const) {
+      it(`HTTP 200 with ${label}: marked UNKNOWN_OUTCOME, the target is not published, and the retry asks the provider before re-sending (same Idempotency-Key)`, async () => {
+        const { target: t } = await setup();
+        mock.script({ match: upload, status: 200, body });
+        await expect(run(t.id)).rejects.toThrow();
+        expect(await publication(t.id)).toMatchObject({ status: "UNKNOWN_OUTCOME", lastErrorKind: "INVALID_RESPONSE" });
+        expect((await target(t.id)).status).toBe("PUBLISHING"); // neither published nor failed: nobody knows yet
+        expect(mock.state.publications.size).toBe(0); // it never reached the provider in this scenario
+
+        await run(t.id); // the retry
+        expect(mock.state.publications.size).toBe(1);
+        const sent = providerRequests("/upload");
+        expect(sent).toHaveLength(2); // the status check found nothing, so it is re-sent …
+        expect(sent[0]!.headers["idempotency-key"]).toBe(sent[1]!.headers["idempotency-key"]); // … with the SAME key
+        expect((await publication(t.id)).status).toBe("PROCESSING");
+      });
+    }
+
+    it("if the provider DID create the job although its answer was unreadable, the retry adopts it: still exactly one provider job", async () => {
+      const { target: t } = await setup();
+      mock.script({ match: upload, status: 200, body: "<html>proxy error</html>" });
+      await expect(run(t.id)).rejects.toThrow();
+      const pub = await publication(t.id);
+      // the provider had in fact accepted it (the answer was mangled on the way back)
+      mock.state.publications.set(pub.requestId, { requestId: pub.requestId, externalId: pub.externalId, profile: "acme_music", platforms: ["tiktok"], status: "processing", results: [], fields: {}, mediaType: "video" });
+      mock.state.requests.length = 0;
+      await run(t.id);
+      expect(providerRequests("/upload")).toHaveLength(0); // adopted, not re-sent
+      expect(mock.state.publications.size).toBe(1);
+      expect((await publication(t.id)).status).toBe("PROCESSING");
+    });
+
+    it("an unreadable STATUS answer never marks anything published", async () => {
+      const { target: t } = await setup();
+      await run(t.id);
+      mock.script({ match: (m, p) => m === "GET" && p === "/uploadposts/status", status: 200, body: "<html>maintenance</html>" }, 1); // exactly the one status request the poll makes: a scripted answer must never outlive its test
+      await poll(t.id, 2).catch(() => undefined);
+      expect((await target(t.id)).status).toBe("PUBLISHING");
+      expect((await publication(t.id)).status).not.toBe("COMPLETED");
+    });
+  });
   it("a provider-side failure finalizes the target and content as FAILED with the provider's reason", async () => {
     const { target: t, content } = await setup();
     await run(t.id);

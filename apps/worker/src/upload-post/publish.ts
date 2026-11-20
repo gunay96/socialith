@@ -344,6 +344,14 @@ export async function publishViaUploadPost(args: UploadPostPublishArgs): Promise
           ...(permanent ? { completedAt: now } : {}),
         },
       });
+    } else {
+      // The provider ANSWERED, but with something that cannot be interpreted (an HTML error page, an empty body, JSON
+      // without any id). It may well have created the job, so this is an unknown outcome — exactly like a timeout: the
+      // retry asks the provider by request_id first and only re-sends (same Idempotency-Key) if nothing exists.
+      await db.uploadPostPublication.update({
+        where: { id: publication.id },
+        data: { status: "UNKNOWN_OUTCOME", lastErrorKind: "INVALID_RESPONSE", lastErrorMessage: (err instanceof Error ? err.message : String(err)).slice(0, 1000) },
+      });
     }
     throw toPublishError(err);
   }
