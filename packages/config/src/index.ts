@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
+import { join, posix, win32 } from "node:path";
 
 /**
  * Validates process.env once at startup so a missing/misconfigured
@@ -429,8 +429,10 @@ export function resolveFfprobePath(env: Env): string {
   if (env.FFPROBE_PATH) return env.FFPROBE_PATH;
   const ffmpeg = env.FFMPEG_PATH;
   if (ffmpeg === "ffmpeg") return "ffprobe";
-  const base = basename(ffmpeg);
-  return /^ffmpeg(\.exe)?$/i.test(base) ? join(dirname(ffmpeg), base.replace(/ffmpeg/i, "ffprobe")) : "ffprobe";
+  // A Windows-style path (drive letter or backslashes) is split the Windows way on any host, so the result does not depend on where this runs.
+  const p = /^[a-zA-Z]:[\\/]/.test(ffmpeg) || ffmpeg.includes("\\") ? win32 : posix;
+  const base = p.basename(ffmpeg);
+  return /^ffmpeg(\.exe)?$/i.test(base) ? p.join(p.dirname(ffmpeg), base.replace(/ffmpeg/i, "ffprobe")) : "ffprobe";
 }
 
 /** The configured upload / extraction limits, shaped like @socialith/media-pack's MediaLimits. */
