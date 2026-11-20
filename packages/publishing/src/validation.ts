@@ -186,6 +186,11 @@ export function validatePublication(input: ValidationInput): { ok: boolean; issu
   return { ok: !issues.some((i) => i.severity === "ERROR"), issues };
 }
 
+/** Account / provider readiness of one destination for one platform (what the destination picker shows). */
+export function validateDestination(destination: DestinationFacts, platform: PlatformKey): ValidationIssue[] {
+  return accountIssues({ platform, destination } as ValidationInput, PLATFORM_RULES[platform]);
+}
+
 function accountIssues(input: ValidationInput, rule: PlatformRule): ValidationIssue[] {
   const d = input.destination;
   const out: ValidationIssue[] = [];

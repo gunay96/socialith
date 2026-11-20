@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canonicalPayload, effectiveText, payloadMatchesApproval } from "./payload.js";
+import { buildTargetPayload, canonicalPayload, effectiveText, payloadMatchesApproval } from "./payload.js";
 import { findRepetitions, normalizeForComparison, similarityPercent } from "./similarity.js";
 
 describe("effectiveText", () => {
@@ -71,5 +71,42 @@ describe("findRepetitions (maxSimilar = 1: every further destination needs its o
   });
   it("two destinations without any text count as repeating each other (same asset, nothing distinguishes them)", () => {
     expect(findRepetitions([item("a", "TIKTOK", null), item("b", "TIKTOK", "")], 85, 1).map((x) => x.id)).toEqual(["b"]);
+  });
+});
+
+describe("buildTargetPayload (shared by the API and the worker)", () => {
+  const target = {
+    platform: "TIKTOK",
+    captionOverride: null,
+    titleOverride: null,
+    content: {
+      caption: "base",
+      soundId: "s1",
+      variations: [{ platform: "TIKTOK", caption: "tiktok text", title: null }, { platform: "YOUTUBE", caption: "yt", title: "yt title" }],
+      assets: [
+        { id: "b", platform: null, createdAt: "2026-01-02T00:00:00Z" },
+        { id: "a", platform: null, createdAt: "2026-01-01T00:00:00Z" },
+        { id: "yt-only", platform: "YOUTUBE", createdAt: "2026-01-01T00:00:00Z" },
+        { id: "tt-only", platform: "TIKTOK", createdAt: "2026-01-03T00:00:00Z" },
+      ],
+    },
+  };
+  it("uses the destination's platform variation and only the assets it would publish, oldest first", () => {
+    const parsed = JSON.parse(buildTargetPayload(target));
+    expect(parsed).toMatchObject({ platform: "TIKTOK", caption: "tiktok text", title: null, assetIds: ["a", "b", "tt-only"], soundId: "s1" });
+  });
+  it("the destination's own text wins and changes the payload", () => {
+    const own = buildTargetPayload({ ...target, captionOverride: "my own text" });
+    expect(JSON.parse(own).caption).toBe("my own text");
+    expect(own).not.toBe(buildTargetPayload(target));
+  });
+  it("is identical for Date and ISO-string timestamps, and changes when any relevant row changes", () => {
+    const withDates = { ...target, content: { ...target.content, assets: target.content.assets.map((a) => ({ ...a, createdAt: new Date(a.createdAt) })) } };
+    expect(buildTargetPayload(withDates)).toBe(buildTargetPayload(target));
+    expect(buildTargetPayload({ ...target, content: { ...target.content, caption: "x", variations: [] } })).not.toBe(buildTargetPayload(target));
+    expect(buildTargetPayload({ ...target, content: { ...target.content, assets: target.content.assets.slice(1) } })).not.toBe(buildTargetPayload(target));
+    expect(buildTargetPayload({ ...target, content: { ...target.content, soundId: null } })).not.toBe(buildTargetPayload(target));
+    // an asset restricted to ANOTHER platform does not affect this destination's payload
+    expect(buildTargetPayload({ ...target, content: { ...target.content, assets: [...target.content.assets, { id: "ig", platform: "INSTAGRAM", createdAt: "2026-02-01T00:00:00Z" }] } })).toBe(buildTargetPayload(target));
   });
 });

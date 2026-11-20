@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validatePublication, type AssetFacts, type DestinationFacts, type PlatformKey, type ValidationInput } from "./validation.js";
+import { validateDestination, validatePublication, type AssetFacts, type DestinationFacts, type PlatformKey, type ValidationInput } from "./validation.js";
 
 const NOW = new Date("2026-11-20T10:00:00Z");
 const IN_2H = new Date(NOW.getTime() + 2 * 3_600_000);
@@ -204,5 +204,13 @@ describe("multiple problems are all reported at once", () => {
     expect(r.ok).toBe(false);
     expect(r.issues.filter((i) => i.severity === "ERROR").map((i) => i.code).sort()).toEqual(["ACCOUNT_NOT_CONNECTED", "CAPTION_TOO_LONG", "MEDIA_MISSING", "SCHEDULE_IN_PAST"]);
     for (const i of r.issues) expect(i.message.length).toBeGreaterThan(15);
+  });
+});
+
+describe("validateDestination (the destination picker's readiness check)", () => {
+  it("is empty for a healthy destination and lists the blocking account problems otherwise", () => {
+    expect(validateDestination(destination("INSTAGRAM"), "INSTAGRAM")).toEqual([]);
+    const bad = validateDestination(destination("INSTAGRAM", { accountStatus: "EXPIRED", uploadPost: null }), "INSTAGRAM");
+    expect(bad.map((i) => i.code).sort()).toEqual(["ACCOUNT_NOT_CONNECTED", "DESTINATION_NOT_LINKED"]);
   });
 });

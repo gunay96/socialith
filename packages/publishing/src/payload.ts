@@ -52,3 +52,40 @@ export function canonicalPayload(i: PayloadInput): string {
 export function payloadMatchesApproval(approved: string | null | undefined, current: string): boolean {
   return typeof approved === "string" && approved === current;
 }
+
+export interface PayloadTarget {
+  /** SocialAccount.platform of the destination (TIKTOK | INSTAGRAM | YOUTUBE). */
+  platform: string;
+  captionOverride: string | null;
+  titleOverride: string | null;
+  content: {
+    caption: string | null;
+    soundId: string | null;
+    variations: { platform: string; caption: string | null; title: string | null }[];
+    assets: { id: string; platform: string | null; createdAt: Date | string }[];
+  };
+}
+
+/**
+ * The canonical payload of one publication, computed from the database rows. The API (when approving and when
+ * checking before scheduling) and the worker (right before it fires) both call THIS function, so they can never
+ * disagree about what "unchanged since approval" means. Assets are the ones this destination would publish:
+ * shared (platform null) plus those restricted to its platform, oldest first.
+ */
+export function buildTargetPayload(t: PayloadTarget): string {
+  const platform = t.platform.toUpperCase();
+  const variation = t.content.variations.find((v) => v.platform.toUpperCase() === platform) ?? null;
+  const text = effectiveText({
+    captionOverride: t.captionOverride,
+    titleOverride: t.titleOverride,
+    variationCaption: variation?.caption ?? null,
+    variationTitle: variation?.title ?? null,
+    contentCaption: t.content.caption,
+  });
+  const time = (v: Date | string) => (v instanceof Date ? v.getTime() : new Date(v).getTime());
+  const assetIds = t.content.assets
+    .filter((a) => a.platform === null || a.platform.toUpperCase() === platform)
+    .sort((a, b) => time(a.createdAt) - time(b.createdAt) || a.id.localeCompare(b.id))
+    .map((a) => a.id);
+  return canonicalPayload({ platform, caption: text.caption, title: text.title, assetIds, soundId: t.content.soundId });
+}
