@@ -171,7 +171,47 @@ const HASHTAG = /#[\p{L}\p{N}_]+/gu;
 const chars = (s: string) => [...s].length;
 const issue = (severity: Severity, field: IssueField, code: string, message: string): ValidationIssue => ({ code, severity, field, message });
 
-export function validatePublication(input: ValidationInput): { ok: boolean; issues: ValidationIssue[] } {
+/**
+ * How much of the media's own metadata is actually KNOWN — and therefore how much of the media rules could really be
+ * applied. Nothing is assumed: until dimensions, duration and file size are recorded on the asset (Media Pack
+ * processing, Phase 5 — technical debt TD-49) the media is never reported as fully validated.
+ *   VERIFIED    every fact the media rules need is known and was checked
+ *   PARTIAL     some are known, the rest were NOT checked (listed in `unknown`)
+ *   UNVERIFIED  none is known: no media limit could be checked
+ *   NONE        there is no publishable media at all
+ */
+export interface MediaVerification {
+  status: "VERIFIED" | "PARTIAL" | "UNVERIFIED" | "NONE";
+  kind: "VIDEO" | "IMAGES" | null;
+  known: string[];
+  unknown: string[];
+}
+
+export interface ValidationResult {
+  /** No ERROR (account, provider, platform capability, caption, schedule, limits …). */
+  ok: boolean;
+  issues: ValidationIssue[];
+  media: MediaVerification;
+  /** ok AND the media metadata is fully known. `ok` alone never means the media was validated. */
+  fullyValidated: boolean;
+}
+
+export function assessMedia(platform: PlatformKey, assets: AssetFacts[]): MediaVerification {
+  const relevant = assets.filter((a) => a.platform === null || a.platform === platform);
+  const videos = relevant.filter((a) => a.type === "VIDEO");
+  const images = relevant.filter((a) => a.type === "IMAGE");
+  if (videos.length === 0 && images.length === 0) return { status: "NONE", kind: null, known: [], unknown: [] };
+  const subject = videos.length > 0 ? [videos[0]!] : images;
+  const facts: [string, (a: AssetFacts) => boolean][] =
+    videos.length > 0
+      ? [["dimensions (aspect ratio)", (a) => Boolean(a.width && a.height)], ["duration", (a) => a.durationSec != null], ["file size", (a) => a.sizeBytes != null]]
+      : [["dimensions (aspect ratio)", (a) => Boolean(a.width && a.height)], ["file size", (a) => a.sizeBytes != null]];
+  const known = facts.filter(([, has]) => subject.every(has)).map(([name]) => name);
+  const unknown = facts.filter(([, has]) => !subject.every(has)).map(([name]) => name);
+  return { status: unknown.length === 0 ? "VERIFIED" : known.length === 0 ? "UNVERIFIED" : "PARTIAL", kind: videos.length > 0 ? "VIDEO" : "IMAGES", known, unknown };
+}
+
+export function validatePublication(input: ValidationInput): ValidationResult {
   const rule = PLATFORM_RULES[input.platform];
   const issues: ValidationIssue[] = [];
   const add = (...i: ValidationIssue[]) => issues.push(...i);
@@ -183,7 +223,9 @@ export function validatePublication(input: ValidationInput): { ok: boolean; issu
   add(...scheduleIssues(input));
   add(...capIssues(input));
 
-  return { ok: !issues.some((i) => i.severity === "ERROR"), issues };
+  const ok = !issues.some((i) => i.severity === "ERROR");
+  const media = assessMedia(input.platform, input.assets);
+  return { ok, issues, media, fullyValidated: ok && media.status === "VERIFIED" };
 }
 
 /** Account / provider readiness of one destination for one platform (what the destination picker shows). */
@@ -234,7 +276,7 @@ function mediaIssues(input: ValidationInput, rule: PlatformRule): ValidationIssu
   if (videos.length > 0) {
     if (videos.length > 1) out.push(issue("WARNING", "media", "MEDIA_MULTIPLE_VIDEOS", "More than one video is attached; only the first one is published."));
     const v = videos[0]!;
-    let unknown = false;
+    const unknownFacts: string[] = [];
     const w = v.width ?? null;
     const h = v.height ?? null;
     if (w && h) {
@@ -243,20 +285,20 @@ function mediaIssues(input: ValidationInput, rule: PlatformRule): ValidationIssu
       if (rec && (ratio < rec[0] || ratio > rec[1])) {
         out.push(issue("WARNING", "media", "VIDEO_ASPECT", `The video is ${w}×${h} (${ratio.toFixed(2)}:1). ${rule.label} short-form video works best vertical (9:16); a different shape may be cropped or letter-boxed.`));
       }
-    } else unknown = true;
+    } else unknownFacts.push("dimensions (aspect ratio)");
     const dur = v.durationSec ?? null;
     if (dur !== null) {
       if (rule.videoDurationMinSec !== null && dur < rule.videoDurationMinSec) out.push(issue("ERROR", "media", "VIDEO_TOO_SHORT", `The video is ${dur.toFixed(1)} s; ${rule.label} needs at least ${rule.videoDurationMinSec} s.`));
       if (rule.videoDurationMaxSec !== null && dur > rule.videoDurationMaxSec) out.push(issue("ERROR", "media", "VIDEO_TOO_LONG", `The video is ${Math.round(dur)} s; ${rule.label} accepts at most ${rule.videoDurationMaxSec} s. Shorten it.`));
       else if (rule.videoDurationRecommendedMaxSec !== null && dur > rule.videoDurationRecommendedMaxSec) out.push(issue("WARNING", "media", "VIDEO_DURATION_ELIGIBILITY", `The video is ${Math.round(dur)} s; ${rule.label} short-form (Reels) is intended for videos up to ${rule.videoDurationRecommendedMaxSec} s, so it may not be eligible for that format.`));
       if (input.platform === "YOUTUBE" && dur > 180 && w && h && w / h < 1) out.push(issue("INFO", "media", "YOUTUBE_NOT_A_SHORT", "This vertical video is longer than 3 minutes, so YouTube will treat it as a regular video, not a Short."));
-    } else unknown = true;
+    } else unknownFacts.push("duration");
     const size = v.sizeBytes ?? null;
     if (size !== null) {
       if (rule.fileMaxBytes !== null && size > rule.fileMaxBytes) out.push(issue("ERROR", "media", "FILE_TOO_LARGE", `The video is ${(size / MB).toFixed(0)} MB; ${rule.label} accepts at most ${(rule.fileMaxBytes / MB).toFixed(0)} MB.`));
       else if (rule.fileWarnBytes !== null && size > rule.fileWarnBytes) out.push(issue("WARNING", "media", "FILE_LARGE", `The video is ${(size / MB).toFixed(0)} MB; ${rule.label} may reject or slow down uploads above about ${(rule.fileWarnBytes / MB).toFixed(0)} MB.`));
-    } else unknown = true;
-    if (unknown) out.push(issue("WARNING", "media", "MEDIA_FACTS_UNKNOWN", "Dimensions, duration or file size of the video are not recorded, so the aspect ratio, duration and file-size limits could not be checked."));
+    } else unknownFacts.push("file size");
+    if (unknownFacts.length > 0) out.push(issue("WARNING", "media", "MEDIA_FACTS_UNKNOWN", `Media NOT fully verified: the video's ${unknownFacts.join(", ")} ${unknownFacts.length === 1 ? "is" : "are"} not recorded, so the matching limits were not checked. Nothing here says the video meets them.`));
   } else if (rule.imageAspect) {
     const [lo, hi] = rule.imageAspect;
     for (const img of images) {
@@ -264,7 +306,7 @@ function mediaIssues(input: ValidationInput, rule: PlatformRule): ValidationIssu
         const ratio = img.width / img.height;
         if (ratio < lo || ratio > hi) out.push(issue("ERROR", "media", "IMAGE_ASPECT", `An image is ${img.width}×${img.height} (${ratio.toFixed(2)}:1); ${rule.label} feed images must be between ${lo}:1 and ${hi}:1 (4:5 to 1.91:1). Crop it.`));
       } else {
-        out.push(issue("WARNING", "media", "MEDIA_FACTS_UNKNOWN", "Image dimensions are not recorded, so the aspect-ratio limit could not be checked."));
+        out.push(issue("WARNING", "media", "MEDIA_FACTS_UNKNOWN", "Media NOT fully verified: the image dimensions are not recorded, so the aspect-ratio limit was not checked."));
         break;
       }
     }

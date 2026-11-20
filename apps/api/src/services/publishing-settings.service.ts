@@ -9,7 +9,7 @@ export async function getSettings(actor: SafeUser): Promise<EffectiveSettings & 
   const s = await getEffectiveSettings(actor.organizationId);
   return {
     ...s,
-    recommendation: s.source === "default" ? "Approval is not required yet (nothing changes for existing content). Save these settings with \"Require approval\" on so that every destination must be approved before it can be scheduled." : null,
+    recommendation: s.source === "default" ? "These are the product defaults (approval required, owner may approve their own work, admins need a second approver). Nothing has been saved for this organization yet; saving keeps your choices from now on." : null,
   };
 }
 
@@ -22,7 +22,8 @@ export async function updateSettings(actor: SafeUser, input: SettingsInput): Pro
   const data = {
     timezone: merged.timezone,
     requireApproval: merged.requireApproval,
-    allowSelfApproval: merged.allowSelfApproval,
+    ownerSelfApproval: merged.ownerSelfApproval,
+    adminSelfApproval: merged.adminSelfApproval,
     autoScheduleOnApproval: merged.autoScheduleOnApproval,
     duplicateGuard: merged.duplicateGuard,
     similarityThresholdPct: merged.similarityThresholdPct,

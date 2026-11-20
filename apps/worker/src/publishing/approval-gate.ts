@@ -1,11 +1,11 @@
 import type { PrismaClient } from "@socialith/database";
-import { buildTargetPayload, payloadMatchesApproval } from "@socialith/publishing";
+import { DEFAULT_PUBLISHING_POLICY, buildTargetPayload, payloadMatchesApproval } from "@socialith/publishing";
 
 /**
  * The approval gate, enforced by the worker right before anything is fired or handed to a provider.
  *
  * Whether approval is required is a property of the organization (PublishingSettings.requireApproval); an
- * organization without a settings row behaves exactly as before Phase 3 and is never gated. When approval IS
+ * organization that never saved a preference is gated too (approval is the product default). When approval IS
  * required, a publication may only go out if it is APPROVED **and** exactly what was approved: the canonical payload
  * stored at approval time (see @socialith/publishing buildTargetPayload) must equal the one computed from the
  * database now. This is the last line of defence — it holds for every path that reaches a provider (scheduled job,
@@ -22,7 +22,8 @@ export const GATE_MESSAGES = {
 
 export async function isApprovalRequired(db: PrismaClient, organizationId: string): Promise<boolean> {
   const settings = await db.publishingSettings.findUnique({ where: { organizationId }, select: { requireApproval: true } });
-  return settings?.requireApproval ?? false;
+  // Product decision: approval is required unless the organization explicitly saved otherwise (same default as the API).
+  return settings?.requireApproval ?? DEFAULT_PUBLISHING_POLICY.requireApproval;
 }
 
 export async function evaluateApprovalGate(db: PrismaClient, contentTargetId: string): Promise<GateVerdict> {

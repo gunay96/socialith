@@ -90,7 +90,8 @@ export const settingsSchema = z
   .object({
     timezone: timezone.optional(),
     requireApproval: z.boolean().optional(),
-    allowSelfApproval: z.boolean().optional(),
+    ownerSelfApproval: z.boolean().optional(),
+    adminSelfApproval: z.boolean().optional(),
     autoScheduleOnApproval: z.boolean().optional(),
     duplicateGuard: z.enum(["BLOCK", "WARN", "OFF"]).optional(),
     similarityThresholdPct: z.number().int().min(50).max(100).optional(),

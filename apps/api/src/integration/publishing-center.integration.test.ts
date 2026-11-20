@@ -50,7 +50,8 @@ interface Detail extends Pub {
   events: { type: string; toState: string | null; reason: string | null; actor: { name: string } | null }[];
   revisions: { revision: number }[];
   attempts: { attemptNumber: number; errorCode: string | null }[];
-  validation: { ok: boolean; issues: Issue[] } | null;
+  validation: { ok: boolean; issues: Issue[]; media: { status: string; unknown: string[]; known: string[] }; fullyValidated: boolean } | null;
+  content: { assets: { id: string; type: string; facts: { width: number | null; height: number | null; durationSec: number | null; sizeBytes: number | null } }[] };
 }
 interface Paged<T> { items: T[]; total: number }
 interface Envelope<T> { success?: boolean; data: T; error?: { code: string; message: string; details?: { issues?: Issue[] } } }
@@ -84,8 +85,15 @@ async function addUser(orgId: string, role: Role, name = role): Promise<Session>
   const user = await prisma.user.create({ data: { organizationId: orgId, name, email, passwordHash: await hashPassword(PASSWORD), role, status: "ACTIVE" } });
   return { cookie: await login(email), orgId, userId: user.id };
 }
-async function makeOrg(role: Role = "ADMIN") {
+/**
+ * Approval is REQUIRED by default (product decision) and an OWNER may approve their own submission (an ADMIN may not).
+ * Most tests exercise workflow/scheduling MECHANICS, so by default the organization here has EXPLICITLY saved the
+ * opt-out; tests about approval turn it on, and the tests about the defaults themselves pass `{ preference: "none" }`
+ * (an organization that never saved anything — exactly what a brand-new organization is).
+ */
+async function makeOrg(role: Role = "OWNER", opts: { preference?: "optOut" | "none" } = {}) {
   const org = await prisma.organization.create({ data: { name: "IT PC", slug: `it-pcapi-${randomUUID().slice(0, 8)}` } });
+  if ((opts.preference ?? "optOut") === "optOut") await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval: false } });
   return addUser(org.id, role);
 }
 
@@ -104,11 +112,11 @@ async function makeDestination(orgId: string, platform: "TIKTOK" | "INSTAGRAM" |
   return { social, account, profile };
 }
 
-async function makeContent(orgId: string, over: { caption?: string; campaignId?: string; soundId?: string; asset?: "VIDEO" | "IMAGE" | null } = {}) {
+async function makeContent(orgId: string, over: { caption?: string; campaignId?: string; soundId?: string; asset?: "VIDEO" | "IMAGE" | null; unknownMedia?: boolean } = {}) {
   const content = await prisma.content.create({ data: { organizationId: orgId, caption: over.caption ?? "New single out now, go stream it everywhere tonight", campaignId: over.campaignId ?? null, soundId: over.soundId ?? null, status: "DRAFT" } });
   if (over.asset !== null) {
     await prisma.contentAsset.create({
-      data: { contentId: content.id, type: over.asset ?? "VIDEO", url: "https://cdn.example.test/v.mp4", metadata: over.asset === "IMAGE" ? { width: 1080, height: 1350 } : { width: 1080, height: 1920, durationSec: 30, sizeBytes: 12_000_000 } },
+      data: { contentId: content.id, type: over.asset ?? "VIDEO", url: "https://cdn.example.test/v.mp4", metadata: over.unknownMedia ? undefined : over.asset === "IMAGE" ? { width: 1080, height: 1350 } : { width: 1080, height: 1920, durationSec: 30, sizeBytes: 12_000_000 } },
     });
   }
   return content;
@@ -167,7 +175,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("access control and organization isolation", () => {
     useServer();
     it("needs a session; read for every role; preparing needs EDITOR; approving and settings need ADMIN", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const viewer = await addUser(admin.orgId, "VIEWER");
       const editor = await addUser(admin.orgId, "EDITOR");
       const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
@@ -212,14 +220,14 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
 
   describe("publishing settings", () => {
     useServer();
-    it("an organization that never saved settings keeps the legacy behaviour (approval NOT required) and is told how to turn it on", async () => {
-      const a = await makeOrg();
-      const s = (await get<{ source: string; requireApproval: boolean; timezone: string; recommendation: string | null; maxPostsPerDestinationPerDay: number }>(a, "/api/publishing/settings")).json.data;
-      expect(s).toMatchObject({ source: "default", requireApproval: false, maxPostsPerDestinationPerDay: 3 });
+    it("an organization that never saved settings gets the PRODUCT DEFAULTS: approval required, owner may self-approve, admin may not", async () => {
+      const a = await makeOrg("OWNER", { preference: "none" });
+      expect(await prisma.publishingSettings.count({ where: { organizationId: a.orgId } })).toBe(0);
+      const s = (await get<{ source: string; requireApproval: boolean; ownerSelfApproval: boolean; adminSelfApproval: boolean; timezone: string; recommendation: string | null; maxPostsPerDestinationPerDay: number }>(a, "/api/publishing/settings")).json.data;
+      expect(s).toMatchObject({ source: "default", requireApproval: true, ownerSelfApproval: true, adminSelfApproval: false, maxPostsPerDestinationPerDay: 3 });
       expect(s.timezone).toBe("Europe/Istanbul");
-      expect(s.recommendation).toMatch(/Require approval/);
-    });
-    it("saving creates the row, is audited, validates the timezone and the bounds", async () => {
+      expect(s.recommendation).toMatch(/product defaults/);
+    });    it("saving creates the row, is audited, validates the timezone and the bounds", async () => {
       const a = await makeOrg();
       const ok = await setSettings(a, { requireApproval: true, timezone: "Europe/Istanbul", maxPostsPerDestinationPerDay: 2 });
       expect(ok.status).toBe(200);
@@ -231,12 +239,152 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
   });
 
+  describe("product decisions: approval required by default, role-based self-approval, honest media validation", () => {
+    useServer();
+    /** a brand-new organization: nothing saved, an OWNER, an ADMIN and an EDITOR, one TikTok destination, one content item */
+    async function fresh() {
+      const owner = await makeOrg("OWNER", { preference: "none" });
+      const admin = await addUser(owner.orgId, "ADMIN", "Ada Admin");
+      const editor = await addUser(owner.orgId, "EDITOR", "Eda Editor");
+      const { social } = await makeDestination(owner.orgId, "TIKTOK", "band");
+      const content = await makeContent(owner.orgId);
+      return { owner, admin, editor, social, content };
+    }
+    const audits = (orgId: string, action: string) => prisma.auditLog.findMany({ where: { organizationId: orgId, action } });
+
+    it("a NEW organization requires approval with nothing saved: DRAFT cannot be scheduled, by the Publishing Center or by the older content API", async () => {
+      const { owner, social, content } = await fresh();
+      const [c] = (await createPubs(owner, content.id, [{ socialAccountId: social.id }])).created;
+      expect(c!.publication.allowedActions).not.toContain("SCHEDULE");
+      const direct = await post(owner, `/api/publishing/publications/${c!.publication.id}/schedule`, { scheduledAt: inMs(2 * HOUR) });
+      expect(direct.status).toBe(409);
+      // the older bulk path cannot be used to get around it either
+      await post(owner, `/api/content/${content.id}/targets`, { socialAccountIds: [social.id] });
+      const legacy = await post<unknown>(owner, `/api/content/${content.id}/schedule`, { scheduledAt: inMs(2 * HOUR) });
+      expect(legacy.status).toBe(409);
+      expect(legacy.json.error!.message).toMatch(/None of this content's destinations is approved/);
+      expect(await prisma.contentTarget.count({ where: { contentId: content.id, status: "SCHEDULED" } })).toBe(0);
+      expect((await get<{ approval: { required: boolean; source: string } }>(owner, "/api/publishing/overview")).json.data.approval).toEqual({ required: true, source: "default" });
+      expect(await prisma.publishingSettings.count({ where: { organizationId: owner.orgId } })).toBe(0); // nothing was silently saved
+    });
+
+    it("an EXPLICITLY saved preference is preserved: an unrelated settings change never re-enables approval, and the opt-out is audited", async () => {
+      const { owner } = await fresh();
+      expect((await setSettings(owner, { requireApproval: false })).status).toBe(200);
+      expect((await setSettings(owner, { timezone: "Europe/Istanbul", maxPostsPerDestinationPerDay: 5 })).status).toBe(200);
+      const s = (await get<{ requireApproval: boolean; source: string }>(owner, "/api/publishing/settings")).json.data;
+      expect(s).toMatchObject({ requireApproval: false, source: "configured" });
+      const changes = await audits(owner.orgId, "PUBLISHING_SETTINGS_CHANGED");
+      expect(JSON.stringify(changes[0]!.metadataJson)).toContain("requireApproval");
+      // and switching it back on is just as explicit
+      await setSettings(owner, { requireApproval: true });
+      expect((await get<{ requireApproval: boolean }>(owner, "/api/publishing/settings")).json.data.requireApproval).toBe(true);
+    });
+
+    it("an OWNER can approve their own submission — and it is ALWAYS recorded as a self-approval (audit log + publication event)", async () => {
+      const { owner, social, content } = await fresh();
+      const [c] = (await createPubs(owner, content.id, [{ socialAccountId: social.id }])).created;
+      const id = c!.publication.id;
+      await act(owner, id, "submit");
+      const r = (await act(owner, id, "approve", { note: "mine, checked" })) as unknown as { publication: Pub };
+      expect(r.publication.state).toBe("APPROVED");
+      const self = await audits(owner.orgId, "PUBLICATION_SELF_APPROVED");
+      expect(self).toHaveLength(1);
+      expect(self[0]).toMatchObject({ userId: owner.userId, targetId: id });
+      expect(await audits(owner.orgId, "PUBLICATION_APPROVED")).toHaveLength(1);
+      const d = await detail(owner, id);
+      const approved = d.events.find((e) => e.type === "APPROVED") as unknown as { metadata: { selfApproval: boolean; approverRole: string } };
+      expect(approved.metadata).toMatchObject({ selfApproval: true, approverRole: "OWNER" });
+    });
+
+    it("an ADMIN cannot approve their own submission by default (403, audited as denied); another approver's approval is not a self-approval", async () => {
+      const { owner, admin, editor, social, content } = await fresh();
+      const [c] = (await createPubs(admin, content.id, [{ socialAccountId: social.id }])).created;
+      const id = c!.publication.id;
+      await act(admin, id, "submit");
+      const denied = await post<unknown>(admin, `/api/publishing/publications/${id}/approve`);
+      expect(denied.status).toBe(403);
+      expect(denied.json.error!.message).toMatch(/Admins cannot approve what they submitted themselves/);
+      expect((await detail(admin, id)).state).toBe("READY_FOR_REVIEW"); // unchanged
+      expect(await audits(owner.orgId, "PUBLICATION_APPROVAL_DENIED")).toHaveLength(1);
+      expect(await audits(owner.orgId, "PUBLICATION_SELF_APPROVED")).toHaveLength(0);
+      // an editor cannot approve at all; the owner approving the admin's work is an ordinary approval
+      expect((await post(editor, `/api/publishing/publications/${id}/approve`)).status).toBe(403);
+      expect(((await act(owner, id, "approve")) as unknown as { publication: Pub }).publication.state).toBe("APPROVED");
+      expect(await audits(owner.orgId, "PUBLICATION_SELF_APPROVED")).toHaveLength(0);
+    });
+
+    it("the policy is configurable per organization: allow admins, forbid the owner — each takes effect, each approval is attributed", async () => {
+      const { owner, admin, social } = await fresh();
+      const make = async () => {
+        const c2 = await makeContent(owner.orgId, { caption: `unique ${randomUUID()}` });
+        const [c] = (await createPubs(owner, c2.id, [{ socialAccountId: social.id }])).created;
+        return c!.publication.id;
+      };
+      // the owner allows admins to approve their own work; the admin submits, then approves it themselves
+      expect((await setSettings(owner, { adminSelfApproval: true })).status).toBe(200);
+      const a = await make();
+      expect((await post<{ publication: Pub }>(admin, `/api/publishing/publications/${a}/submit`)).status).toBe(200);
+      expect((await detail(admin, a)).state).toBe("READY_FOR_REVIEW");
+      expect(((await act(admin, a, "approve")) as unknown as { publication: Pub }).publication.state).toBe("APPROVED");
+      const adminSelf = await audits(owner.orgId, "PUBLICATION_SELF_APPROVED");
+      expect(adminSelf.map((x) => x.userId)).toEqual([admin.userId]);
+      // owner self-approval switched off: the owner needs someone else
+      expect((await setSettings(owner, { ownerSelfApproval: false })).status).toBe(200);
+      const b = await make();
+      await act(owner, b, "submit");
+      const refused = await post<unknown>(owner, `/api/publishing/publications/${b}/approve`);
+      expect(refused.status).toBe(403);
+      expect(refused.json.error!.message).toMatch(/do not allow the owner to approve their own submission/);
+      expect(((await act(admin, b, "approve")) as unknown as { publication: Pub }).publication.state).toBe("APPROVED");
+    });
+
+    it("automatic scheduling happens ONLY after approval: submitting schedules nothing, approving schedules at the planned time", async () => {
+      const { owner, social, content } = await fresh();
+      await setSettings(owner, { autoScheduleOnApproval: true });
+      const [c] = (await createPubs(owner, content.id, [{ socialAccountId: social.id, scheduledAt: inMs(4 * HOUR) }])).created;
+      const id = c!.publication.id;
+      await act(owner, id, "submit");
+      expect((await detail(owner, id)).state).toBe("READY_FOR_REVIEW");
+      expect(await schedulingQueue().getJob(contentSchedulingJobId(content.id))).toBeFalsy(); // not scheduled before approval
+      const r = (await act(owner, id, "approve")) as unknown as { publication: Pub; autoScheduled: boolean };
+      expect(r.autoScheduled).toBe(true);
+      expect(r.publication.state).toBe("SCHEDULED");
+      expect(await schedulingQueue().getJob(contentSchedulingJobId(content.id))).toBeTruthy();
+    });
+
+    it("media validation never pretends: unknown dimensions/duration are named, and the publication is NOT 'fully validated'", async () => {
+      const owner = await makeOrg();
+      const { social } = await makeDestination(owner.orgId, "TIKTOK", "band");
+      const known = await makeContent(owner.orgId, { caption: "known facts" });
+      const unknown = await makeContent(owner.orgId, { caption: "no facts recorded", unknownMedia: true });
+      const [k] = (await createPubs(owner, known.id, [{ socialAccountId: social.id }])).created;
+      const [u] = (await createPubs(owner, unknown.id, [{ socialAccountId: social.id }])).created;
+      type V = { ok: boolean; fullyValidated: boolean; media: { status: string; unknown: string[]; known: string[] }; issues: Issue[] };
+      expect(k!.validation as unknown as V).toMatchObject({ ok: true, fullyValidated: true, media: { status: "VERIFIED", unknown: [] } });
+      const uv = u!.validation as unknown as V;
+      expect(uv.ok).toBe(true); // nothing is KNOWN to be wrong …
+      expect(uv.fullyValidated).toBe(false); // … but that is not "validated"
+      expect(uv.media).toEqual({ status: "UNVERIFIED", kind: "VIDEO", known: [], unknown: ["dimensions (aspect ratio)", "duration", "file size"] });
+      expect(uv.issues.find((i) => i.code === "MEDIA_FACTS_UNKNOWN")!.message).toMatch(/NOT fully verified/);
+      // the detail page shows what is unknown per file (null = unknown), and the platform/provider checks stay active
+      const d = await detail(owner, u!.publication.id);
+      expect(d.validation!.fullyValidated).toBe(false);
+      expect(d.content.assets[0]!.facts).toEqual({ width: null, height: null, durationSec: null, sizeBytes: null });
+      const dk = await detail(owner, k!.publication.id);
+      expect(dk.content.assets[0]!.facts).toEqual({ width: 1080, height: 1920, durationSec: 30, sizeBytes: 12_000_000 });
+      await prisma.socialAccount.update({ where: { id: social.id }, data: { status: "EXPIRED" } });
+      const blocked = (await post<unknown>(owner, `/api/publishing/publications/${u!.publication.id}/validate`, {})).json.data as unknown as V;
+      expect(blocked.ok).toBe(false);
+      expect(blocked.issues.map((i) => i.code)).toContain("ACCOUNT_NOT_CONNECTED");
+    });
+  });
   describe("campaign automatic-scheduling setting", () => {
     useServer();
     it("is admin-only, audited, tri-state (inherit / on / off) and organization-scoped", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const editor = await addUser(admin.orgId, "EDITOR");
-      const other = await makeOrg("ADMIN");
+      const other = await makeOrg();
       const campaign = await prisma.campaign.create({ data: { organizationId: admin.orgId, name: "Single launch" } });
       type Row = { id: string; autoScheduleOnApproval: boolean | null; effective: boolean };
       const list = async (s: Session) => (await get<{ organizationDefault: boolean; items: Row[] }>(s, "/api/publishing/campaigns")).json.data;
@@ -258,7 +406,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("approval workflow (DRAFT → READY_FOR_REVIEW → APPROVED → SCHEDULED)", () => {
     useServer();
     it("walks the whole lifecycle with history: who, when, why — and the job follows the database", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const editor = await addUser(admin.orgId, "EDITOR", "Eda Editor");
       const approver = await addUser(admin.orgId, "ADMIN", "Ali Approver");
       await setSettings(admin, { requireApproval: true });
@@ -305,7 +453,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("rejection needs a reason, is recorded, and the item can be corrected, resubmitted and approved", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { requireApproval: true });
       const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
@@ -326,7 +474,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("withdrawing a submission returns it to DRAFT (submitter or admin only)", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const editorA = await addUser(admin.orgId, "EDITOR");
       const editorB = await addUser(admin.orgId, "EDITOR");
       const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
@@ -340,21 +488,8 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
       expect((await act(admin, id, "withdraw")).state).toBe("DRAFT");
     });
 
-    it("self-approval can be switched off: the submitter cannot approve, a different admin can", async () => {
-      const admin = await makeOrg("ADMIN");
-      const other = await addUser(admin.orgId, "ADMIN");
-      await setSettings(admin, { requireApproval: true, allowSelfApproval: false });
-      const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
-      const content = await makeContent(admin.orgId);
-      const [c] = (await createPubs(admin, content.id, [{ socialAccountId: social.id }])).created;
-      const id = c!.publication.id;
-      await act(admin, id, "submit");
-      expect((await post(admin, `/api/publishing/publications/${id}/approve`)).status).toBe(403);
-      expect((await act(other, id, "approve") as unknown as { publication: Pub }).publication.state).toBe("APPROVED");
-    });
-
     it("an approval is pinned to what was reviewed: editing the text afterwards withdraws it, and so does a change made through the content API", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { requireApproval: true });
       const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
@@ -380,7 +515,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("a SCHEDULED publication whose content changes behind its back loses its approval AND its schedule when someone reschedules it (job removed, provider swept)", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { requireApproval: true });
       const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
@@ -400,8 +535,9 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
       expect(await schedulingQueue().getJob(contentSchedulingJobId(content.id))).toBeFalsy();
       expect((await prisma.content.findUniqueOrThrow({ where: { id: content.id } })).status).toBe("READY");
     });
-    it("an organization that does NOT require approval can schedule straight from DRAFT (legacy behaviour preserved)", async () => {
-      const admin = await makeOrg("ADMIN");
+    it("an organization that EXPLICITLY saved the opt-out can schedule straight from DRAFT", async () => {
+      const admin = await makeOrg();
+      expect((await setSettings(admin, { requireApproval: false })).status).toBe(200); // an explicit, audited preference
       const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
       const [c] = (await createPubs(admin, content.id, [{ socialAccountId: social.id }])).created;
@@ -414,7 +550,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("scheduling operations: reschedule, unschedule, hold, release, cancel, reopen, retry", () => {
     useServer();
     async function scheduled(requireApproval = false) {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       if (requireApproval) await setSettings(admin, { requireApproval: true });
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
@@ -470,7 +606,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("nothing can be done to a publication that is in flight or published", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
       const mk = (status: "PUBLISHING" | "PUBLISHED", attemptCount: number) => prisma.contentTarget.create({ data: { contentId: content.id, socialAccountId: dest.social.id, status, attemptCount } });
@@ -485,7 +621,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("retry of a FAILED publication queues ONE publishing job (QUEUED) and clears the failure; STALE can retry or be rescheduled", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
       const failed = await prisma.contentTarget.create({ data: { contentId: content.id, socialAccountId: dest.social.id, status: "FAILED", errorMessage: "boom", attemptCount: 2 } });
@@ -507,7 +643,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("retry respects approval: an unapproved failed publication is refused", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { requireApproval: true });
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
@@ -521,7 +657,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("provider-side scheduled jobs (hand-off)", () => {
     useServer();
     async function handedOff(minutesAhead: number) {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
       const at = new Date(Date.now() + minutesAhead * MIN);
@@ -568,7 +704,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("platform validation before scheduling", () => {
     useServer();
     async function submitWith(over: { platform?: "TIKTOK" | "INSTAGRAM" | "YOUTUBE"; destination?: Parameters<typeof makeDestination>[3]; content?: Parameters<typeof makeContent>[1]; caption?: string; title?: string; requireMusic?: boolean }) {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const platform = over.platform ?? "TIKTOK";
       const dest = await makeDestination(admin.orgId, platform, "band", over.destination);
       const content = await makeContent(admin.orgId, over.content);
@@ -599,7 +735,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("provider status: an account needing reauthorization or a blocked profile cannot be submitted", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       await prisma.uploadPostConnectedAccount.update({ where: { id: dest.account.id }, data: { status: "REAUTH_REQUIRED", reauthRequired: true } });
       const content = await makeContent(admin.orgId);
@@ -613,7 +749,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("time validity: past, too soon and too far are refused with their own codes; a valid time schedules", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const content = await makeContent(admin.orgId);
       const [c] = (await createPubs(admin, content.id, [{ socialAccountId: dest.social.id }])).created;
@@ -630,7 +766,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("publishing limits per destination, in the ORGANIZATION's day (Europe/Istanbul): minimum spacing, then the daily cap", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { maxPostsPerDestinationPerDay: 2, minMinutesBetweenPosts: 60, timezone: "Europe/Istanbul" });
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const day = addDays(zonedDayKey(new Date(), "Europe/Istanbul"), 2); // far enough ahead to satisfy the minimum lead
@@ -652,7 +788,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
       expect(await plan(zonedTimeToUtc({ year: ny, month: nm, day: nd, hour: 0, minute: 30 }, "Europe/Istanbul").toISOString())).toEqual({ status: 200, codes: [] });
     });
     it("the TikTok track: warnings by default (the post would go out without it); 'require the track' makes them blocking; a verified, rights-confirmed mapping clears them", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const sound = await prisma.sound.create({ data: { organizationId: admin.orgId, title: "Neon Skyline", artist: "Wave Theory", platform: "TIKTOK" } });
       const content = await makeContent(admin.orgId, { soundId: sound.id });
@@ -675,7 +811,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("multi-account operations: independent publications, no repetitive distribution", () => {
     useServer();
     it("one content, several destinations: each is its own publication with its own state; acting on one never changes the others", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { requireApproval: true });
       const d1 = await makeDestination(admin.orgId, "TIKTOK", "page.one");
       const d2 = await makeDestination(admin.orgId, "TIKTOK", "page.two");
@@ -713,7 +849,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("the same asset with the same text on several destinations of one platform is BLOCKED; a caption of its own fixes it", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dests = await Promise.all([1, 2, 3].map((n) => makeDestination(admin.orgId, "TIKTOK", `page.${n}`)));
       const content = await makeContent(admin.orgId);
       const { created } = await createPubs(admin, content.id, dests.map((d) => ({ socialAccountId: d.social.id })));
@@ -729,7 +865,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("the guard can be a warning or off, and different platforms never count as repeats of each other", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const tt = await makeDestination(admin.orgId, "TIKTOK", "t1");
       const tt2 = await makeDestination(admin.orgId, "TIKTOK", "t2");
       const ig = await makeDestination(admin.orgId, "INSTAGRAM", "i1");
@@ -746,7 +882,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("a cancelled or rejected sibling does not make another destination a repeat", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const [d1, d2] = await Promise.all([makeDestination(admin.orgId, "TIKTOK", "p1"), makeDestination(admin.orgId, "TIKTOK", "p2")]);
       const content = await makeContent(admin.orgId);
       const { created } = await createPubs(admin, content.id, [{ socialAccountId: d1.social.id }, { socialAccountId: d2.social.id }]);
@@ -756,7 +892,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("a destination can have only one publication per content; the second request is skipped, not duplicated", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const d = await makeDestination(admin.orgId, "TIKTOK", "p1");
       const content = await makeContent(admin.orgId);
       await createPubs(admin, content.id, [{ socialAccountId: d.social.id }]);
@@ -772,7 +908,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("automatic scheduling after approval (campaign setting over organization setting)", () => {
     useServer();
     async function setupAuto(opts: { org?: boolean; campaign?: boolean | null }) {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { requireApproval: true, autoScheduleOnApproval: opts.org ?? false });
       const campaign = await prisma.campaign.create({ data: { organizationId: admin.orgId, name: "Single launch", autoScheduleOnApproval: opts.campaign ?? null } });
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
@@ -815,7 +951,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("the older content API cannot bypass approval", () => {
     useServer();
     it("when approval is required, /content/:id/schedule schedules only APPROVED destinations and refuses when none is approved", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { requireApproval: true });
       const d1 = await makeDestination(admin.orgId, "TIKTOK", "p1");
       const d2 = await makeDestination(admin.orgId, "INSTAGRAM", "p2");
@@ -839,7 +975,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("without the approval requirement it behaves as before, and rescheduling moves the already-scheduled targets too", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const d = await makeDestination(admin.orgId, "TIKTOK", "p1");
       const content = await makeContent(admin.orgId);
       await post(admin, `/api/content/${content.id}/targets`, { socialAccountIds: [d.social.id] });
@@ -854,7 +990,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("parked targets (held / cancelled) are not re-scheduled by the bulk path", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const [d1, d2] = await Promise.all([makeDestination(admin.orgId, "TIKTOK", "p1"), makeDestination(admin.orgId, "INSTAGRAM", "p2")]);
       const content = await makeContent(admin.orgId);
       const held = await prisma.contentTarget.create({ data: { contentId: content.id, socialAccountId: d1.social.id, status: "PENDING", exception: "HELD" } });
@@ -869,7 +1005,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
   describe("monitoring and reporting views", () => {
     useServer();
     it("listing by state returns exactly the publications that DERIVE to that state (every combination of the stored columns)", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       type Combo = { status: "PENDING" | "SCHEDULED" | "PUBLISHING" | "PUBLISHED" | "FAILED"; approvalStatus: "DRAFT" | "READY_FOR_REVIEW" | "APPROVED" | "REJECTED"; exception: "HELD" | "CANCELLED" | "STALE" | null; attemptCount: number; provider: boolean };
       const combos: Combo[] = [];
@@ -902,7 +1038,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("filters: artist, campaign, platform, creator, managed page, state list, date range, search, destination; pagination", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const creator = await prisma.creator.create({ data: { organizationId: admin.orgId, name: "Acme Artist" } });
       const page = await prisma.managedPage.create({ data: { organizationId: admin.orgId, name: "Indie Page", slug: "indie" } });
       const tt = await makeDestination(admin.orgId, "TIKTOK", "tt.band", { creatorId: creator.id, managedPageId: page.id });
@@ -933,7 +1069,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("the detail page carries every reporting field: ids, provider, external job, times, URL, failure reason, retry count, attempts, history", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const dest = await makeDestination(admin.orgId, "TIKTOK", "band");
       const campaign = await prisma.campaign.create({ data: { organizationId: admin.orgId, name: "Spring single" } });
       const content = await makeContent(admin.orgId, { campaignId: campaign.id });
@@ -961,7 +1097,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("the calendar feed: range-bounded, timezone-aware, distinguishes provider from Socialith ownership, hides cancelled, caps the range", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const [d1, d2, d3] = await Promise.all([makeDestination(admin.orgId, "TIKTOK", "p1"), makeDestination(admin.orgId, "INSTAGRAM", "p2"), makeDestination(admin.orgId, "YOUTUBE", "p3")]);
       const content = await makeContent(admin.orgId);
       const at = new Date(Date.now() + 26 * HOUR);
@@ -987,7 +1123,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("overview metrics: scheduled, published, pending, failed (incl. stale), awaiting approval, connected accounts (demo accounts excluded), upcoming", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       const real = await makeDestination(admin.orgId, "TIKTOK", "real");
       await makeDestination(admin.orgId, "INSTAGRAM", "demo", { demo: true });
       await makeDestination(admin.orgId, "YOUTUBE", "gone", { status: "DISCONNECTED" });
@@ -1011,7 +1147,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
 
     it("the destination picker: search, platform/creator/page filters, readiness with reasons, daily usage vs the cap", async () => {
-      const admin = await makeOrg("ADMIN");
+      const admin = await makeOrg();
       await setSettings(admin, { maxPostsPerDestinationPerDay: 1 });
       const creator = await prisma.creator.create({ data: { organizationId: admin.orgId, name: "Acme Artist" } });
       const page = await prisma.managedPage.create({ data: { organizationId: admin.orgId, name: "Indie Page", slug: "indie" } });

@@ -41,6 +41,9 @@ const cleanups: (() => Promise<void>)[] = [];
 
 async function makeOrg(label: string) {
   const org = await prisma.organization.create({ data: { name: `IT ${label}`, slug: `it-${label}-${randomUUID().slice(0, 8)}` } });
+  // These tests exercise scheduling MECHANICS, not approval. Approval is required by default (product decision), so each
+  // organization here explicitly saves the opt-out; approval itself is covered in publishing-center.integration.test.ts.
+  await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval: false } });
   createdOrganizationIds.push(org.id);
   return org;
 }

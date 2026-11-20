@@ -39,6 +39,9 @@ function makeClient(overrides: Partial<ConstructorParameters<typeof UploadPostCl
 
 async function setup(platform: "tiktok" | "instagram" | "youtube" = "tiktok", assetType: "VIDEO" | "IMAGE" = "VIDEO", profile = "acme_music") {
   const org = await prisma.organization.create({ data: { name: "IT UPP", slug: `it-upp-${randomUUID().slice(0, 8)}` } });
+  // These tests exercise scheduling MECHANICS, not approval. Approval is required by default (product decision), so each
+  // organization here explicitly saves the opt-out; approval itself is covered in publishing-center.integration.test.ts.
+  await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval: false } });
   await syncUploadPostProfiles({ db: prisma, client: makeClient(), log: silent }, org.id, "MANUAL");
   const profileRow = await prisma.uploadPostProfile.findUniqueOrThrow({ where: { organizationId_username: { organizationId: org.id, username: profile } } });
   const acc = await prisma.uploadPostConnectedAccount.findUniqueOrThrow({ where: { profileId_platform: { profileId: profileRow.id, platform } } });
@@ -319,7 +322,7 @@ suite("Upload-Post publishing (real MySQL, contract double)", () => {
 
   describe("Publishing Center: approval gate, destination-specific text, required track", () => {
     async function requireApproval(orgId: string) {
-      await prisma.publishingSettings.create({ data: { organizationId: orgId, requireApproval: true } });
+      await prisma.publishingSettings.update({ where: { organizationId: orgId }, data: { requireApproval: true } });
     }
     async function approveNow(targetId: string) {
       const t = await prisma.contentTarget.findUniqueOrThrow({ where: { id: targetId }, include: { socialAccount: { select: { platform: true } }, content: { include: { variations: true, assets: true } } } });

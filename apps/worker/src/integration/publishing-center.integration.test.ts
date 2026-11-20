@@ -27,9 +27,13 @@ const config = buildReconcileConfig({ SCHEDULE_STALE_AFTER_MINUTES: 30, PUBLISHI
 const cleanups: (() => Promise<void>)[] = [];
 const publishingJobIds: string[] = [];
 
-async function makeOrg(label: string, requireApproval?: boolean) {
+/**
+ * `true` / `false` = an EXPLICITLY saved preference (most tests here exercise mechanics and opt out; the approval tests opt in);
+ * `"DEFAULT"` = the organization never saved one, i.e. the product default (approval REQUIRED).
+ */
+async function makeOrg(label: string, requireApproval: boolean | "DEFAULT" = false) {
   const org = await prisma.organization.create({ data: { name: `IT ${label}`, slug: `it-pc-${label}-${randomUUID().slice(0, 8)}` } });
-  if (requireApproval !== undefined) await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval } });
+  if (requireApproval !== "DEFAULT") await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval } });
   return org;
 }
 const makeAccount = (organizationId: string, platform: "TIKTOK" | "INSTAGRAM" | "YOUTUBE" = "TIKTOK") =>
@@ -207,22 +211,46 @@ suite("Publishing Center on the real scheduling engine (MySQL + Redis/BullMQ)", 
       expect((await prisma.publicationEvent.findFirstOrThrow({ where: { contentTargetId: t.id, type: "HELD" } })).metadata).toMatchObject({ gate: "CONTENT_CHANGED" });
     });
 
-    it("an approved, unchanged target fires; an organization without settings is never gated (legacy behaviour)", async () => {
+    it("an approved, unchanged target fires", async () => {
       const org = await makeOrg("gate-ok", true);
-      const legacy = await makeOrg("gate-legacy");
-      const results: string[] = [];
-      for (const o of [org, legacy]) {
-        const account = await makeAccount(o.id);
-        const at = new Date(Date.now() - 1_000);
-        const c = await makeContent(o.id, at);
-        const t = await makeTarget(c.id, account.id, at);
-        if (o === org) await approve(t.id);
-        await processContentScheduling(fakeJob(c.id));
-        results.push((await target(t.id)).status);
-      }
-      expect(results).toEqual(["PUBLISHING", "PUBLISHING"]);
+      const account = await makeAccount(org.id);
+      const at = new Date(Date.now() - 1_000);
+      const c = await makeContent(org.id, at);
+      const t = await makeTarget(c.id, account.id, at);
+      await approve(t.id);
+      await processContentScheduling(fakeJob(c.id));
+      expect((await target(t.id)).status).toBe("PUBLISHING");
     });
 
+    it("APPROVAL IS THE DEFAULT: an organization that never saved a preference is gated exactly like one that requires approval", async () => {
+      const org = await makeOrg("gate-default", "DEFAULT");
+      expect(await prisma.publishingSettings.count({ where: { organizationId: org.id } })).toBe(0);
+      const account = await makeAccount(org.id);
+      const at = new Date(Date.now() - 1_000);
+      const c = await makeContent(org.id, at);
+      const t = await makeTarget(c.id, account.id, at);
+      await processContentScheduling(fakeJob(c.id));
+      expect(await target(t.id)).toMatchObject({ status: "PENDING", exception: "HELD" });
+      expect(await evaluateApprovalGate(prisma, t.id)).toMatchObject({ ok: false, code: "NOT_APPROVED" });
+      expect(await prisma.publishAttempt.count({ where: { contentTargetId: t.id } })).toBe(0); // nothing reached any provider
+      // once approved and re-scheduled (what the API does: target SCHEDULED again, content rolled up to SCHEDULED) it goes out, with no preference ever saved
+      await prisma.contentTarget.update({ where: { id: t.id }, data: { status: "SCHEDULED", exception: null } });
+      await prisma.content.update({ where: { id: c.id }, data: { status: "SCHEDULED" } });
+      await approve(t.id);
+      await processContentScheduling(fakeJob(c.id));
+      expect((await target(t.id)).status).toBe("PUBLISHING");
+    });
+
+    it("an EXPLICITLY saved opt-out is honoured (never silently re-enabled by the default)", async () => {
+      const org = await makeOrg("gate-optout", false);
+      const account = await makeAccount(org.id);
+      const at = new Date(Date.now() - 1_000);
+      const c = await makeContent(org.id, at);
+      const t = await makeTarget(c.id, account.id, at);
+      await processContentScheduling(fakeJob(c.id));
+      expect((await target(t.id)).status).toBe("PUBLISHING");
+      expect(await evaluateApprovalGate(prisma, t.id)).toEqual({ ok: true });
+    });
     it("the gate is evaluated per destination: the approved one fires, its unapproved sibling is held", async () => {
       const org = await makeOrg("gate-per-dest", true);
       const [a1, a2] = await Promise.all([makeAccount(org.id), makeAccount(org.id)]);

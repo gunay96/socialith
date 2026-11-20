@@ -1198,7 +1198,10 @@ model PublishingSettings {
   organizationId               String                   @unique @map("organization_id")
   timezone                     String                   @default("Europe/Istanbul") @db.VarChar(64)
   requireApproval              Boolean                  @default(true) @map("require_approval")
-  allowSelfApproval            Boolean                  @default(true) @map("allow_self_approval")
+  // The OWNER may approve their own submission (default on); an ADMIN only when the organization allows it (default off).
+  // CREATOR users can never approve (enforced in code, @socialith/publishing evaluateApprover). Column of adminSelfApproval keeps its Phase 3 name.
+  ownerSelfApproval            Boolean                  @default(true) @map("owner_self_approval")
+  adminSelfApproval            Boolean                  @default(false) @map("allow_self_approval")
   autoScheduleOnApproval       Boolean                  @default(false) @map("auto_schedule_on_approval")
   duplicateGuard               PublishingDuplicateGuard @default(BLOCK) @map("duplicate_guard")
   similarityThresholdPct       Int                      @default(85) @map("similarity_threshold_pct")

@@ -48,6 +48,9 @@ async function moveSchedule(contentId: string, at: Date): Promise<void> {
 }
 async function setup(scheduledInMs: number, platform: "tiktok" | "instagram" = "tiktok") {
   const org = await prisma.organization.create({ data: { name: "IT SW", slug: `it-sw-${randomUUID().slice(0, 8)}` } });
+  // These tests exercise scheduling MECHANICS, not approval. Approval is required by default (product decision), so each
+  // organization here explicitly saves the opt-out; approval itself is covered in publishing-center.integration.test.ts.
+  await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval: false } });
   await syncUploadPostProfiles({ db: prisma, client, log: silent }, org.id, "MANUAL");
   const profile = await prisma.uploadPostProfile.findUniqueOrThrow({ where: { organizationId_username: { organizationId: org.id, username: "acme_music" } } });
   const acc = await prisma.uploadPostConnectedAccount.findUniqueOrThrow({ where: { profileId_platform: { profileId: profile.id, platform } } });
@@ -312,7 +315,7 @@ suite("Upload-Post hybrid scheduling (real MySQL, contract double)", () => {
 
     it("never hands an unapproved publication to the provider's scheduler; approving it makes it eligible", async () => {
       const { org, target } = await setup(3 * HOUR);
-      await prisma.publishingSettings.create({ data: { organizationId: org.id, requireApproval: true } });
+      await prisma.publishingSettings.update({ where: { organizationId: org.id }, data: { requireApproval: true } });
       expect((await sweep()).handedOff).toBe(0);
       expect(await prisma.uploadPostPublication.count({ where: { contentTargetId: target.id } })).toBe(0);
       expect(mock.state.jobs.size).toBe(0);

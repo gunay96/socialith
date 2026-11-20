@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateDestination, validatePublication, type AssetFacts, type DestinationFacts, type PlatformKey, type ValidationInput } from "./validation.js";
+import { assessMedia, validateDestination, validatePublication, type AssetFacts, type DestinationFacts, type PlatformKey, type ValidationInput } from "./validation.js";
 
 const NOW = new Date("2026-11-20T10:00:00Z");
 const IN_2H = new Date(NOW.getTime() + 2 * 3_600_000);
@@ -212,5 +212,55 @@ describe("validateDestination (the destination picker's readiness check)", () =>
     expect(validateDestination(destination("INSTAGRAM"), "INSTAGRAM")).toEqual([]);
     const bad = validateDestination(destination("INSTAGRAM", { accountStatus: "EXPIRED", uploadPost: null }), "INSTAGRAM");
     expect(bad.map((i) => i.code).sort()).toEqual(["ACCOUNT_NOT_CONNECTED", "DESTINATION_NOT_LINKED"]);
+  });
+});
+describe("media verification is never pretended (unknown metadata stays unknown)", () => {
+  const unknownVideo = video({ width: null, height: null, durationSec: null, sizeBytes: null });
+
+  it("a video with all facts known is VERIFIED and the publication is fully validated", () => {
+    const r = validatePublication(input("TIKTOK"));
+    expect(r.media).toEqual({ status: "VERIFIED", kind: "VIDEO", known: ["dimensions (aspect ratio)", "duration", "file size"], unknown: [] });
+    expect(r.ok).toBe(true);
+    expect(r.fullyValidated).toBe(true);
+  });
+
+  it("unknown dimensions/duration/size: ok is still true (nothing is wrong that we know of) but it is NOT fully validated, and the missing facts are named", () => {
+    const r = validatePublication(input("TIKTOK", { assets: [unknownVideo] }));
+    expect(r.ok).toBe(true);
+    expect(r.fullyValidated).toBe(false);
+    expect(r.media).toMatchObject({ status: "UNVERIFIED", unknown: ["dimensions (aspect ratio)", "duration", "file size"], known: [] });
+    const warning = r.issues.find((i) => i.code === "MEDIA_FACTS_UNKNOWN")!;
+    expect(warning.severity).toBe("WARNING");
+    expect(warning.message).toMatch(/NOT fully verified/);
+    expect(warning.message).toMatch(/dimensions \(aspect ratio\), duration, file size/);
+    expect(warning.message).toMatch(/Nothing here says the video meets them/);
+  });
+
+  it("partial knowledge is PARTIAL and lists exactly what was not checked", () => {
+    const r = validatePublication(input("INSTAGRAM", { assets: [video({ durationSec: null, width: 1080, height: 1920 })] }));
+    expect(r.media).toMatchObject({ status: "PARTIAL", known: ["dimensions (aspect ratio)", "file size"], unknown: ["duration"] });
+    expect(r.fullyValidated).toBe(false);
+    expect(r.issues.find((i) => i.code === "MEDIA_FACTS_UNKNOWN")!.message).toMatch(/video's duration is not recorded/);
+  });
+
+  it("a known violation is still an error even when other facts are unknown (what IS known is always enforced)", () => {
+    const r = validatePublication(input("INSTAGRAM", { assets: [video({ durationSec: 2, width: null, height: null })] }));
+    expect(r.ok).toBe(false);
+    expect(r.issues.map((i) => i.code)).toEqual(expect.arrayContaining(["VIDEO_TOO_SHORT", "MEDIA_FACTS_UNKNOWN"]));
+  });
+
+  it("images need dimensions and size; no publishable media is NONE; account/capability checks stay active regardless", () => {
+    expect(assessMedia("INSTAGRAM", [image()]).status).toBe("PARTIAL"); // dimensions known, file size not recorded
+    expect(assessMedia("INSTAGRAM", [image({ sizeBytes: 100 })]).status).toBe("VERIFIED");
+    expect(assessMedia("INSTAGRAM", [image({ width: null, height: null })]).status).toBe("UNVERIFIED");
+    expect(assessMedia("TIKTOK", []).status).toBe("NONE");
+    const blocked = validatePublication(input("TIKTOK", { assets: [unknownVideo], destination: destination("TIKTOK", { accountStatus: "EXPIRED" }) }));
+    expect(blocked.ok).toBe(false);
+    expect(blocked.fullyValidated).toBe(false);
+    expect(blocked.issues.map((i) => i.code)).toContain("ACCOUNT_NOT_CONNECTED");
+  });
+
+  it("assets restricted to another platform are not considered", () => {
+    expect(assessMedia("TIKTOK", [video({ platform: "YOUTUBE", width: null, height: null })]).status).toBe("NONE");
   });
 });

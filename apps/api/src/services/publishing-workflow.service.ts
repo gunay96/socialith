@@ -5,6 +5,7 @@ import {
   STATE_LABELS,
   allowedActions,
   isValidTimeZone,
+  evaluateApprover,
   payloadMatchesApproval,
   type PublicationAction,
   type PublicationState,
@@ -260,8 +261,12 @@ export async function approvePublication(actor: SafeUser, id: string, note?: str
   const settings = await getEffectiveSettings(actor.organizationId);
   const t = await loadPublication(actor, id);
   const state = assertAllowed(t, "APPROVE", settings);
-  if (!settings.allowSelfApproval && t.submittedById === actor.id) {
-    throw new ApiHttpError(403, ERROR_CODES.FORBIDDEN, "Self-approval is switched off in Publishing Settings: a different admin must approve what you submitted.");
+  // Who may approve, and may they approve THIS one (their own submission)? OWNER: yes by default; ADMIN: only when the
+  // organization allows it; CREATOR / EDITOR / VIEWER: never (see @socialith/publishing evaluateApprover).
+  const verdict = evaluateApprover({ role: actor.role, actorId: actor.id, submitterId: t.submittedById, ownerSelfApproval: settings.ownerSelfApproval, adminSelfApproval: settings.adminSelfApproval });
+  if (!verdict.allowed) {
+    await audit(actor, t, "PUBLICATION_APPROVAL_DENIED", { code: verdict.code, selfApproval: verdict.selfApproval });
+    throw new ApiHttpError(403, ERROR_CODES.FORBIDDEN, verdict.message);
   }
 
   // The approver sees (and is held to) the same platform validation, so nothing unpublishable is approved.
@@ -271,9 +276,11 @@ export async function approvePublication(actor: SafeUser, id: string, note?: str
   const payload = payloadOf(t);
   await prisma.$transaction(async (tx) => {
     await casUpdate(tx, t, { approvalStatus: "APPROVED", approvedPayload: payload, approvedById: actor.id, approvedAt: new Date() });
-    await recordEvent(tx, { organizationId: actor.organizationId, contentTargetId: t.id, type: "APPROVED", fromState: state, toState: "APPROVED", actorId: actor.id, reason: note ?? null });
+    await recordEvent(tx, { organizationId: actor.organizationId, contentTargetId: t.id, type: "APPROVED", fromState: state, toState: "APPROVED", actorId: actor.id, reason: note ?? null, metadata: { selfApproval: verdict.selfApproval, approverRole: actor.role, mediaVerification: v.media.status } });
   });
-  await audit(actor, t, "PUBLICATION_APPROVED", { note: note ?? null });
+  await audit(actor, t, "PUBLICATION_APPROVED", { note: note ?? null, selfApproval: verdict.selfApproval, approverRole: actor.role });
+  // A self-approval is ALWAYS recorded as such, in addition to the approval itself (never optional, whatever the policy).
+  if (verdict.selfApproval) await audit(actor, t, "PUBLICATION_SELF_APPROVED", { approverRole: actor.role, submittedById: t.submittedById });
 
   // Automatic scheduling after approval (campaign setting, else organization setting): only at the time a person already
   // planned for this publication — never an invented time — and only if it passes the same scheduling validation.

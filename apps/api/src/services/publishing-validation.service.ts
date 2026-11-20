@@ -5,6 +5,7 @@ import {
   zonedDayKey,
   zonedDayRange,
   type AssetFacts,
+  type MediaVerification,
   type MusicFacts,
   type PlatformKey,
   type ValidationIssue,
@@ -18,7 +19,8 @@ export const MAX_SCHEDULE_DAYS_AHEAD = 365;
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-function assetFacts(t: Publication): AssetFacts[] {
+/** The media facts recorded on each asset (null = unknown). Exported so the detail page can show what is NOT known. */
+export function assetFacts(t: Publication): AssetFacts[] {
   return t.content.assets.map((a) => {
     const meta = a.metadata && typeof a.metadata === "object" && !Array.isArray(a.metadata) ? (a.metadata as Record<string, unknown>) : {};
     return {
@@ -83,7 +85,7 @@ export interface ValidateOptions {
 }
 
 /** Platform validation for ONE publication, plus the repetitive-distribution guard against its siblings. */
-export async function validatePublicationTarget(t: Publication, opts: ValidateOptions): Promise<{ ok: boolean; issues: ValidationIssue[] }> {
+export async function validatePublicationTarget(t: Publication, opts: ValidateOptions): Promise<{ ok: boolean; issues: ValidationIssue[]; media: MediaVerification; fullyValidated: boolean }> {
   const platform = t.socialAccount.platform as PlatformKey;
   const up = t.socialAccount.uploadPostAccount;
   const text = effectiveTextOf(t);
@@ -118,7 +120,9 @@ export async function validatePublicationTarget(t: Publication, opts: ValidateOp
   });
 
   const issues = [...result.issues, ...(await repetitionIssues(t, opts.settings))];
-  return { ok: !issues.some((i) => i.severity === "ERROR"), issues };
+  const ok = !issues.some((i) => i.severity === "ERROR");
+  // `ok` means "nothing is known to be wrong"; only known media facts make it "fully validated" (never assumed).
+  return { ok, issues, media: result.media, fullyValidated: ok && result.media.status === "VERIFIED" };
 }
 
 /**

@@ -1,6 +1,7 @@
 import { prisma } from "@socialith/database";
 import type { Prisma, PublicationEventType } from "@socialith/database";
 import {
+  DEFAULT_PUBLISHING_POLICY,
   DEFAULT_TIMEZONE,
   allowedActions,
   buildTargetPayload,
@@ -41,11 +42,14 @@ export type Publication = Prisma.ContentTargetGetPayload<{ include: typeof PUBLI
 // ---------------------------------------------------------------------------------------------- settings
 
 export interface EffectiveSettings {
-  /** "default" = the organization never saved Publishing Settings: Phase 3 defaults apply and approval is NOT required (legacy behaviour). */
+  /** "default" = the organization never saved Publishing Settings: the product defaults apply (approval REQUIRED). An explicitly saved preference is always honoured. */
   source: "default" | "configured";
   timezone: string;
   requireApproval: boolean;
-  allowSelfApproval: boolean;
+  /** The OWNER may approve what they submitted themselves. */
+  ownerSelfApproval: boolean;
+  /** An ADMIN may approve what they submitted themselves (a CREATOR never may). */
+  adminSelfApproval: boolean;
   autoScheduleOnApproval: boolean;
   duplicateGuard: "BLOCK" | "WARN" | "OFF";
   similarityThresholdPct: number;
@@ -65,7 +69,8 @@ export async function getEffectiveSettings(organizationId: string): Promise<Effe
       source: "configured",
       timezone: row.timezone,
       requireApproval: row.requireApproval,
-      allowSelfApproval: row.allowSelfApproval,
+      ownerSelfApproval: row.ownerSelfApproval,
+      adminSelfApproval: row.adminSelfApproval,
       autoScheduleOnApproval: row.autoScheduleOnApproval,
       duplicateGuard: row.duplicateGuard,
       similarityThresholdPct: row.similarityThresholdPct,
@@ -78,8 +83,11 @@ export async function getEffectiveSettings(organizationId: string): Promise<Effe
   return {
     source: "default",
     timezone: org?.timezone || DEFAULT_TIMEZONE,
-    requireApproval: false,
-    allowSelfApproval: true,
+    // Product decision: approval is required unless an organization explicitly saved otherwise (new organizations and
+    // organizations without a saved preference alike). The worker applies the same default.
+    requireApproval: DEFAULT_PUBLISHING_POLICY.requireApproval,
+    ownerSelfApproval: DEFAULT_PUBLISHING_POLICY.ownerSelfApproval,
+    adminSelfApproval: DEFAULT_PUBLISHING_POLICY.adminSelfApproval,
     autoScheduleOnApproval: false,
     duplicateGuard: "BLOCK",
     similarityThresholdPct: 85,

@@ -5,7 +5,7 @@ import { PUBLICATION_STATES, validateDestination, zonedDayKey, zonedDayRange, ty
 import { ApiHttpError } from "../middleware/error-handler.js";
 import type { SafeUser } from "../types/auth.js";
 import { PUBLICATION_INCLUDE, getEffectiveSettings, stateOf, toPublicationDto, effectiveTextOf, isProviderOwned } from "./publishing-common.js";
-import { validatePublicationTarget } from "./publishing-validation.service.js";
+import { assetFacts, validatePublicationTarget } from "./publishing-validation.service.js";
 
 // ------------------------------------------------------------------------------------------------ filters
 
@@ -187,6 +187,7 @@ export async function getPublicationDetail(actor: SafeUser, id: string) {
   const name = (uid: string | null) => people.find((p) => p.id === uid)?.name ?? null;
 
   const dto = toPublicationDto(t, settings.requireApproval);
+  const factsById = new Map(assetFacts(t).map((f) => [f.id, f]));
   return {
     ...dto,
     timezone: settings.timezone,
@@ -197,7 +198,13 @@ export async function getPublicationDetail(actor: SafeUser, id: string) {
       caption: t.content.caption,
       status: t.content.status,
       siblingPublications: siblings,
-      assets: t.content.assets.filter((a) => a.platform === null || a.platform === t.socialAccount.platform).map((a) => ({ id: a.id, type: a.type, platform: a.platform, url: a.url, metadata: a.metadata })),
+      // `facts` shows what is KNOWN about each file; a null is an honest "unknown", never a guess.
+      assets: t.content.assets
+        .filter((a) => a.platform === null || a.platform === t.socialAccount.platform)
+        .map((a) => {
+          const f = factsById.get(a.id);
+          return { id: a.id, type: a.type, platform: a.platform, url: a.url, metadata: a.metadata, facts: { width: f?.width ?? null, height: f?.height ?? null, durationSec: f?.durationSec ?? null, sizeBytes: f?.sizeBytes ?? null } };
+        }),
     },
     providerOwned: isProviderOwned(t),
     validation,
