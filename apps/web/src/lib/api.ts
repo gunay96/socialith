@@ -24,7 +24,8 @@ function resolveApiBaseUrl(): string {
   return raw.replace(/\/+$/, "").replace(/\/api$/, "");
 }
 
-const API_BASE_URL = resolveApiBaseUrl();
+/** The API origin (used by code that cannot go through fetch helpers, e.g. XHR upload progress and media URLs). */
+export const API_BASE_URL = resolveApiBaseUrl();
 
 /**
  * A real top-level browser navigation URL (used as an <a href>, never
