@@ -5,3 +5,4 @@ export * from "./similarity.js";
 export * from "./validation.js";
 export * from "./content-rollup.js";
 export * from "./policy.js";
+export * from "./editorial.js";
