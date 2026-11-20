@@ -91,9 +91,16 @@ Browser check (manual, throwaway database, real API + worker + FFmpeg): a ZIP co
 
 ## 11. Known limitations
 
-* **Single-request uploads** (TD-60): a proxy such as Cloudflare caps a request body near 100 MB, and Node's `requestTimeout` (300 s) bounds slow connections. Chunked or direct-to-R2 upload is future work.
-* **Real R2 is not verified** (TD-61); the adapter is verified against a real S3 client and an in-process S3 server.
-* The **original archive is retained** (TD-63).
+* **Single-request uploads** (TD-60, **open**): a proxy such as Cloudflare caps a request body near 100 MB, and Node's `requestTimeout` (300 s) bounds slow connections. This path stays for development and small files only. The production path for large packs is the direct-to-R2 multipart upload designed in `DIRECT_UPLOAD_ARCHITECTURE.md` (not yet built).
+* **Real R2 is not verified** (TD-61). The adapter is verified against a real S3 client and an in-process S3 server only. Verifying it against the real Cloudflare R2 bucket is **mandatory before production deployment** (it does not block development). Nothing in this project may claim real R2 connectivity until that test has been run.
+* The **original archive is retained by default** (TD-63, owner decision; see §12).
 * A ZIP whose header lies about sizes fails mid-extraction; entries already extracted stay in the pack (TD-64).
 * Browsers cannot play every container/codec (e.g. some MOV/HEVC files); the file is measured and downloadable, and a browser-friendly preview is produced by the renderer in 5C.
 * Duplicate detection is exact-content only.
+
+## 12. Original ZIP archive retention (owner decision)
+
+* **Default: keep.** The uploaded ZIP is stored once, untouched, at its own key and is **never deleted automatically**, not after a successful extraction and not when a pack is archived. Silent deletion of originals is not allowed.
+* **Access:** administrators can reach the original through the pack (its stored archive); it is private like every library file and is served only through the authenticated, organization-checked API.
+* **Storage implication:** a ZIP pack occupies its archive **plus** its extracted files, roughly twice the size of the pack (media files do not compress further, so the extracted copy is about as large as the archive). For a 2 GiB archive that is about 4 GiB. Duplicates inside the library are recorded without a second copy, which offsets this only when packs overlap. Plan R2 capacity and cost on this basis.
+* **Future retention policy (designed, not implemented):** a configurable, per-organization policy such as "keep for N days after a successful extraction" or "keep until archived", with a dry-run report of what would be deleted and an audit entry for every deletion. **Automatic deletion will not be implemented until the owner approves the policy.** Until then nothing in the code path deletes an original archive.
