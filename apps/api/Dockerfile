@@ -24,6 +24,8 @@ COPY packages/database/package.json ./packages/database/package.json
 COPY packages/types/package.json ./packages/types/package.json
 COPY packages/upload-post/package.json ./packages/upload-post/package.json
 COPY packages/publishing/package.json ./packages/publishing/package.json
+COPY packages/media-pack/package.json ./packages/media-pack/package.json
+COPY packages/studio/package.json ./packages/studio/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 COPY packages/video-engine/package.json ./packages/video-engine/package.json
 RUN pnpm install --frozen-lockfile

@@ -12,6 +12,8 @@
       "@socialith/database": ["../../packages/database/src/index.ts"],
       "@socialith/types": ["../../packages/types/src/index.ts"],
       "@socialith/publishing": ["../../packages/publishing/src/index.ts"],
+      "@socialith/media-pack": ["../../packages/media-pack/src/index.ts"],
+      "@socialith/studio": ["../../packages/studio/src/index.ts"],
       "@socialith/upload-post": ["../../packages/upload-post/src/index.ts"],
       "@socialith/video-engine": ["../../packages/video-engine/src/index.ts"]
     }

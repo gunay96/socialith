@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    // Typecheck and tests resolve workspace packages to SOURCE, so they never need another package's dist/ first
+    // (same convention as apps/api/tsconfig.json; tsconfig.build.json is the one that emits).
+    "paths": {
+      "@socialith/publishing": ["../publishing/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

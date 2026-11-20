@@ -29,6 +29,15 @@ reference, outside CI).
 The integration suites include the production owner bootstrap (TD-32): exactly-one-owner under 8-way concurrency,
 idempotence, seed-data refusal, real scrypt login, and the full CLI path.
 
+**Rendering (Phase 5C).** The `verify` job installs `ffmpeg`, `fonts-dejavu-core` and `fonts-liberation` (Ubuntu 24.04:
+FFmpeg 6.1, `fonts-liberation` 2.1.5) and, with `CI=true`, the real-FFmpeg render tests and the font-metrics test **fail**
+instead of skipping when FFmpeg or a font is missing. The worker image is Debian 12 (FFmpeg 5.1, `fonts-liberation`
+1.07.4), so the metrics table and the filter graph must work with both; the suite was also run on Debian 12, Ubuntu 24.04,
+Ubuntu 26.04 and Windows (see `PHASE5C_TESTING.md`). One FFmpeg 5.1.9 defect (`drawbox replace=1` crashes) was found only
+by running on Debian 12 and is avoided in the renderer. Running the render tests on a machine whose font packages differ
+from these versions can fail `font-metrics.test.ts` until the table is regenerated
+(`packages/video-engine/scripts/generate-font-metrics.ts`, see `MEDIA_RENDERING.md`).
+
 ## Running the same steps locally
 
 ```bash

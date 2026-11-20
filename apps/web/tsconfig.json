@@ -14,7 +14,7 @@
     // — keeps `tsc --noEmit` (and Next's dev/build resolution, which
     // also reads tsconfig paths) working without requiring
     // packages/types/dist to exist first.
-    "paths": { "@/*": ["./src/*"], "@socialith/types": ["../../packages/types/src/index.ts"], "@socialith/publishing": ["../../packages/publishing/src/index.ts"] }
+    "paths": { "@/*": ["./src/*"], "@socialith/types": ["../../packages/types/src/index.ts"], "@socialith/publishing": ["../../packages/publishing/src/index.ts"], "@socialith/studio": ["../../packages/studio/src/index.ts"] }
   },
   "include": ["next-env.d.ts", "src", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]

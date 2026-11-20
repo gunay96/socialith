@@ -21,6 +21,11 @@ function NavLink({ href, label }: { href: string; label: string }) {
   );
 }
 
+/** A quiet heading between groups of the sidebar (docs/SOCIALITH_UX_DESIGN_SYSTEM.md section 3.2): same routes, grouped by what the person is doing. */
+function NavGroup({ label }: { label: string }) {
+  return <div className="mt-4 px-3 text-xs uppercase tracking-widest text-muted">{label}</div>;
+}
+
 export default function AppShellLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [user, setUser] = useState<SafeUser | null>(null);
@@ -68,13 +73,18 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
           <div className="flex flex-col gap-1">
             <div className="mb-4 px-3 text-sm font-semibold tracking-tight">SOCIALITH</div>
             <NavLink href="/" label="Dashboard" />
-            <NavLink href="/accounts" label="Accounts" />
+            <NavGroup label="Operate" />
+            <NavLink href="/publishing" label="Publishing Center" />
             <NavLink href="/campaigns" label="Campaigns" />
+            <NavGroup label="Create" />
+            <NavLink href="/studio" label="Content Studio" />
             <NavLink href="/content" label="Content" />
             <NavLink href="/sounds" label="Music / Sounds" />
+            <NavGroup label="Network" />
             <NavLink href="/page-network" label="Page Network" />
-            <NavLink href="/publishing" label="Publishing Center" />
+            <NavLink href="/accounts" label="Accounts" />
             <NavLink href="/upload-post" label="Upload-Post" />
+            <NavGroup label="Admin" />
             <NavLink href="/team" label="Team" />
           </div>
           <div className="flex flex-col gap-2 border-t border-border pt-4">

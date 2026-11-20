@@ -90,6 +90,16 @@ model Organization {
   publishingSettings     PublishingSettings?
   pageCategories         PageCategory[]
   pageGroups             PageGroup[]
+  mediaPacks             MediaPack[]
+  mediaAssets            MediaAsset[]
+  operationTasks         OperationTask[]
+  textCategories         TextCategory[]
+  textEntries            TextEntry[]
+  textCollections        TextCollection[]
+  textImportBatches      TextImportBatch[]
+  textUsages             TextUsage[]
+  contentRecipes         ContentRecipe[]
+  mediaRenderJobs        MediaRenderJob[]
 
   @@map("organizations")
 }
@@ -360,12 +370,15 @@ model Campaign {
   createdAt              DateTime       @default(now()) @map("created_at")
   updatedAt              DateTime       @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy    User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy    User?                @relation(fields: [createdById], references: [id], onDelete: SetNull)
   content      Content[]
   // Phase 4: thematic pages / page groups this campaign runs on.
   pages        CampaignPage[]
   pageGroups   CampaignPageGroup[]
+  mediaPacks   MediaPackCampaign[]
+  mediaAssets  MediaAssetCampaign[]
+  texts        TextEntryCampaign[]
 
   @@index([organizationId, status])
   @@index([organizationId, createdAt])
@@ -880,32 +893,32 @@ enum MusicAvailability {
 //   UploadPostProfile/Account  the provider's records - linked to the destination exactly as in Phase 2, never copied here
 //   Creator                    an individual content creator - a different entity, never a page
 model ManagedPage {
-  id             String            @id @default(cuid())
-  organizationId String            @map("organization_id")
-  name           String
-  slug           String
-  description    String?           @db.Text
-  status         ManagedPageStatus @default(ACTIVE)
+  id                String            @id @default(cuid())
+  organizationId    String            @map("organization_id")
+  name              String
+  slug              String
+  description       String?           @db.Text
+  status            ManagedPageStatus @default(ACTIVE)
   // Phase 4 ---------------------------------------------------------------------------------------------------
-  categoryId        String?  @map("category_id")
+  categoryId        String?           @map("category_id")
   // The platform this page lives on (null = a Phase 2 row that was never completed).
   platform          Platform?
   // The page's public handle, normalized (lower-case, no leading @). Unique per (organization, platform).
   username          String?
-  profileUrl        String?  @map("profile_url") @db.Text
-  targetAudience    String?  @map("target_audience") @db.Text
+  profileUrl        String?           @map("profile_url") @db.Text
+  targetAudience    String?           @map("target_audience") @db.Text
   // Content language of the page (BCP-47 primary tag, e.g. "tr", "en"); null = follow the category.
-  language          String?  @db.VarChar(16)
+  language          String?           @db.VarChar(16)
   // The page's own editorial identity text; overrides the category's default editorial style.
-  editorialIdentity String?  @map("editorial_identity") @db.Text
+  editorialIdentity String?           @map("editorial_identity") @db.Text
   // Structured editorial overrides (EditorialProfile in packages/publishing); a value here beats the category's.
   profile           Json?
-  internalNotes     String?  @map("internal_notes") @db.Text
+  internalNotes     String?           @map("internal_notes") @db.Text
   // The Publishing Destination this page is authorized to publish through. At most one page per destination
   // (unique), and the destination is never copied or recreated: this is only a reference.
-  socialAccountId   String?  @unique @map("social_account_id")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
+  socialAccountId   String?           @unique @map("social_account_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category           PageCategory?       @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -913,6 +926,8 @@ model ManagedPage {
   uploadPostProfiles UploadPostProfile[]
   groupMemberships   PageGroupMember[]
   campaignPages      CampaignPage[]
+  texts              TextEntryPage[]
+  recipes            ContentRecipePage[]
 
   @@unique([organizationId, slug])
   // One page record per real page: the same handle cannot be registered twice on a platform (NULLs do not collide).
@@ -939,8 +954,10 @@ model PageCategory {
   createdAt             DateTime          @default(now()) @map("created_at")
   updatedAt             DateTime          @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pages        ManagedPage[]
+  texts        TextEntryPageCategory[]
+  recipes      ContentRecipePageCategory[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, name])
@@ -961,9 +978,13 @@ model PageGroup {
   createdAt          DateTime          @default(now()) @map("created_at")
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
-  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   members      PageGroupMember[]
   campaigns    CampaignPageGroup[]
+  mediaPacks   MediaPackPageGroup[]
+  mediaAssets  MediaAssetPageGroup[]
+  texts        TextEntryPageGroup[]
+  recipes      ContentRecipePageGroup[]
 
   @@unique([organizationId, slug])
   @@unique([organizationId, name])
@@ -1350,4 +1371,725 @@ model PublishingSettings {
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
   @@map("publishing_settings")
+}
+
+// =============================================================================
+// Phase 5A - Media Pack manager
+//
+// The library is the SOURCE catalogue: immutable, private originals plus separately stored derivatives. It is not
+// ContentAsset (the per-content publishing attachment): a render or "use in content" creates a ContentAsset that points
+// back to a library asset. Exact duplicates are recorded as DUPLICATE rows (no second copy of the bytes is stored).
+// =============================================================================
+
+enum MediaPackSource {
+  ZIP
+  MANUAL
+}
+
+enum MediaPackStatus {
+  // The archive is queued or being extracted.
+  PROCESSING
+  READY
+  // Extracted, but some entries were rejected or failed (listed on the assets).
+  PARTIAL
+  // The archive as a whole was refused or extraction failed.
+  FAILED
+  ARCHIVED
+}
+
+enum MediaAssetKind {
+  VIDEO
+  IMAGE
+  AUDIO
+  TEXT
+  SPREADSHEET
+}
+
+enum MediaAssetStatus {
+  ANALYZING
+  READY
+  // Stored, but probing/thumbnailing failed (the reason is on the row).
+  FAILED
+  // Never stored: signature/MIME/size/path rules refused it.
+  REJECTED
+  // Same bytes as an earlier asset; nothing stored.
+  DUPLICATE
+  ARCHIVED
+}
+
+enum MediaRightsStatus {
+  UNVERIFIED
+  CONFIRMED
+  RESTRICTED
+}
+
+enum MediaDerivativeKind {
+  THUMBNAIL
+  PREVIEW
+}
+
+model MediaPack {
+  id                  String          @id @default(cuid())
+  organizationId      String          @map("organization_id")
+  name                String
+  description         String?         @db.Text
+  sourceType          MediaPackSource @default(ZIP) @map("source_type")
+  sourceFileName      String?         @map("source_file_name")
+  // Private storage key of the ORIGINAL archive, kept untouched.
+  sourceArchiveKey    String?         @map("source_archive_key") @db.VarChar(512)
+  sourceArchiveBytes  BigInt?         @map("source_archive_bytes")
+  sourceArchiveSha256 String?         @map("source_archive_sha256") @db.VarChar(64)
+  status              MediaPackStatus @default(PROCESSING)
+  entryCount          Int?            @map("entry_count")
+  assetCount          Int             @default(0) @map("asset_count")
+  rejectedCount       Int             @default(0) @map("rejected_count")
+  duplicateCount      Int             @default(0) @map("duplicate_count")
+  ignoredCount        Int             @default(0) @map("ignored_count")
+  errorCode           String?         @map("error_code") @db.VarChar(64)
+  errorMessage        String?         @map("error_message") @db.Text
+  createdById         String?         @map("created_by_id")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  completedAt         DateTime?       @map("completed_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assets       MediaAsset[]
+  campaigns    MediaPackCampaign[]
+  pageGroups   MediaPackPageGroup[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@map("media_packs")
+}
+
+model MediaAsset {
+  id                  String            @id @default(cuid())
+  organizationId      String            @map("organization_id")
+  packId              String?           @map("pack_id")
+  // Folder structure inside the archive, kept as metadata only (never used as a filesystem path).
+  folderPath          String            @default("") @map("folder_path") @db.VarChar(255)
+  originalName        String            @map("original_name")
+  // Full sanitized path inside the archive; unique per pack so a restarted extraction never duplicates an entry.
+  entryPath           String?           @map("entry_path") @db.VarChar(255)
+  kind                MediaAssetKind
+  status              MediaAssetStatus  @default(ANALYZING)
+  mimeType            String            @map("mime_type") @db.VarChar(100)
+  sizeBytes           BigInt            @map("size_bytes")
+  sha256              String            @db.VarChar(64)
+  // Private storage key of the immutable original (null when nothing was stored: REJECTED / DUPLICATE).
+  storageKey          String?           @map("storage_key") @db.VarChar(512)
+  duplicateOfId       String?           @map("duplicate_of_id")
+  rejectionCode       String?           @map("rejection_code") @db.VarChar(64)
+  rejectionReason     String?           @map("rejection_reason") @db.Text
+  // Media facts, all measured by ffprobe (null = not known; never guessed).
+  width               Int?
+  height              Int?
+  aspectRatio         String?           @map("aspect_ratio") @db.VarChar(16)
+  aspectDecimal       Float?            @map("aspect_decimal")
+  durationMs          Int?              @map("duration_ms")
+  fps                 Float?
+  videoCodec          String?           @map("video_codec") @db.VarChar(40)
+  audioCodec          String?           @map("audio_codec") @db.VarChar(40)
+  hasAudio            Boolean?          @map("has_audio")
+  bitrateKbps         Int?              @map("bitrate_kbps")
+  container           String?           @db.VarChar(80)
+  sampleRate          Int?              @map("sample_rate")
+  channels            Int?
+  facts               Json?
+  rightsStatus        MediaRightsStatus @default(UNVERIFIED) @map("rights_status")
+  rightsNotes         String?           @map("rights_notes") @db.Text
+  rightsConfirmedById String?           @map("rights_confirmed_by_id")
+  rightsConfirmedAt   DateTime?         @map("rights_confirmed_at")
+  notes               String?           @db.Text
+  createdById         String?           @map("created_by_id")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+  analyzedAt          DateTime?         @map("analyzed_at")
+  // Phase 5C: where the file came from. UPLOAD = a person added it; RENDER = Socialith made it from a recipe (renderJobId says which job).
+  origin              MediaAssetOrigin  @default(UPLOAD)
+  // A plain id (not a foreign key); unique, so a render job can never produce two output assets, even if it runs twice.
+  renderJobId         String?           @unique @map("render_job_id")
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pack         MediaPack?            @relation(fields: [packId], references: [id], onDelete: Cascade)
+  duplicateOf  MediaAsset?           @relation("MediaAssetDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates   MediaAsset[]          @relation("MediaAssetDuplicates")
+  derivatives  MediaDerivative[]
+  tags         MediaAssetTag[]
+  campaigns    MediaAssetCampaign[]
+  pageGroups   MediaAssetPageGroup[]
+
+  @@unique([packId, entryPath])
+  @@index([organizationId, sha256])
+  @@index([organizationId, status, kind])
+  @@index([organizationId, createdAt])
+  @@index([organizationId, originalName])
+  @@index([packId])
+  @@map("media_assets")
+}
+
+// Generated files kept SEPARATE from the original: thumbnails now, previews and renders in later sub-phases.
+model MediaDerivative {
+  id          String              @id @default(cuid())
+  assetId     String              @map("asset_id")
+  kind        MediaDerivativeKind
+  storageKey  String              @map("storage_key") @db.VarChar(512)
+  contentType String              @map("content_type") @db.VarChar(100)
+  sizeBytes   Int                 @map("size_bytes")
+  width       Int?
+  height      Int?
+  durationMs  Int?                @map("duration_ms")
+  createdAt   DateTime            @default(now()) @map("created_at")
+
+  asset MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, kind])
+  @@map("media_derivatives")
+}
+
+model MediaAssetTag {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  assetId        String   @map("asset_id")
+  // Lower-case, trimmed.
+  tag            String   @db.VarChar(64)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  asset MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, tag])
+  @@index([organizationId, tag])
+  @@map("media_asset_tags")
+}
+
+model MediaPackCampaign {
+  id         String   @id @default(cuid())
+  packId     String   @map("pack_id")
+  campaignId String   @map("campaign_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  pack     MediaPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  campaign Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([packId, campaignId])
+  @@index([campaignId])
+  @@map("media_pack_campaigns")
+}
+
+model MediaPackPageGroup {
+  id        String   @id @default(cuid())
+  packId    String   @map("pack_id")
+  groupId   String   @map("group_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  pack  MediaPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  group PageGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([packId, groupId])
+  @@index([groupId])
+  @@map("media_pack_page_groups")
+}
+
+model MediaAssetCampaign {
+  id         String   @id @default(cuid())
+  assetId    String   @map("asset_id")
+  campaignId String   @map("campaign_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  asset    MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  campaign Campaign   @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, campaignId])
+  @@index([campaignId])
+  @@map("media_asset_campaigns")
+}
+
+model MediaAssetPageGroup {
+  id        String   @id @default(cuid())
+  assetId   String   @map("asset_id")
+  groupId   String   @map("group_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  asset MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  group PageGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, groupId])
+  @@index([groupId])
+  @@map("media_asset_page_groups")
+}
+
+// =============================================================================
+// Phase 5 - the progress ledger (docs/LIVE_OPERATIONS_ARCHITECTURE.md)
+//
+// NOT a second job engine: BullMQ stays the executor. One row per measurable unit of work, written by the workers
+// (throttled) and read by the UI, so progress survives page refreshes and worker restarts. percentage is NEVER stored:
+// it is completed_units / total_units x 100, computed when read, and only when total_units is known; with no total the
+// task is indeterminate.
+// =============================================================================
+
+enum OperationTaskStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model OperationTask {
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  // MEDIA_ZIP_EXTRACT, MEDIA_ANALYZE, RENDER, AI_GENERATION, ... (a string so new kinds need no migration)
+  type           String              @db.VarChar(40)
+  status         OperationTaskStatus @default(QUEUED)
+  // Human-readable current stage ("Extracting", "Probing", ...) and what it is working on.
+  stage          String?             @db.VarChar(80)
+  stageDetail    String?             @map("stage_detail") @db.VarChar(255)
+  completedUnits Int                 @default(0) @map("completed_units")
+  // null = not measurable (indeterminate).
+  totalUnits     Int?                @map("total_units")
+  // What a unit is ("files", "entries", "ms", "items").
+  unit           String?             @db.VarChar(24)
+  subjectType    String?             @map("subject_type") @db.VarChar(40)
+  subjectId      String?             @map("subject_id")
+  parentTaskId   String?             @map("parent_task_id")
+  queueName      String?             @map("queue_name") @db.VarChar(64)
+  queueJobId     String?             @map("queue_job_id") @db.VarChar(128)
+  attempts       Int                 @default(0)
+  errorCode      String?             @map("error_code") @db.VarChar(64)
+  errorMessage   String?             @map("error_message") @db.Text
+  errorRemedy    String?             @map("error_remedy") @db.Text
+  createdById    String?             @map("created_by_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  startedAt      DateTime?           @map("started_at")
+  finishedAt     DateTime?           @map("finished_at")
+  lastProgressAt DateTime?           @map("last_progress_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, type, createdAt])
+  @@index([subjectType, subjectId])
+  @@index([parentTaskId])
+  @@map("operation_tasks")
+}
+
+// =============================================================================
+// Phase 5B: Text Library and Content Recipes
+//
+// Texts are things a page may say (quotes, captions, headlines). They are written or imported by people; Socialith never
+// invents a text, a lyric or a fact. A text is PENDING until an administrator approves it, and changing an approved
+// text sends it back to PENDING. Applicability links (categories, campaigns, page categories, pages, page groups)
+// reuse the existing Page Network and Campaign models; "no links" means "applies everywhere".
+//
+// A recipe is a stored composition definition (how text and media are combined). It references the existing page
+// categories, groups and pages; it never copies them. Nothing here renders media (Phase 5C).
+// =============================================================================
+
+enum LibraryStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum TextApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum TextSource {
+  MANUAL
+  TXT
+  CSV
+  XLSX
+}
+
+enum TextUsageKind {
+  // A person recorded that the text was used somewhere.
+  MANUAL
+  // Recorded against a Content (publication) row.
+  PUBLICATION
+  // Recorded by the renderer (Phase 5C).
+  RENDER
+}
+
+model TextCategory {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  name           String
+  slug           String
+  description    String?       @db.Text
+  status         LibraryStatus @default(ACTIVE)
+  createdById    String?       @map("created_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  texts        TextEntryCategory[]
+
+  @@unique([organizationId, slug])
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("text_categories")
+}
+
+model TextImportBatch {
+  id             String     @id @default(cuid())
+  organizationId String     @map("organization_id")
+  fileName       String     @map("file_name")
+  format         TextSource
+  fileBytes      Int        @map("file_bytes")
+  contentSha256  String     @map("content_sha256") @db.VarChar(64)
+  totalRows      Int        @map("total_rows")
+  importedCount  Int        @map("imported_count")
+  duplicateCount Int        @map("duplicate_count")
+  invalidCount   Int        @map("invalid_count")
+  // The options used (default language, source, categories ...) and a bounded sample of row problems.
+  options        Json?
+  problems       Json?
+  createdById    String?    @map("created_by_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("text_import_batches")
+}
+
+model TextEntry {
+  id             String             @id @default(cuid())
+  organizationId String             @map("organization_id")
+  // The text exactly as it will be used (cleaned of control characters, otherwise unchanged).
+  body           String             @db.Text
+  // SHA-256 of the duplicate-comparison form of the text (case, spacing, punctuation and the Turkish i folded).
+  normalizedHash String             @map("normalized_hash") @db.VarChar(64)
+  // Diacritic-free lower-case form, used only for search.
+  searchText     String             @map("search_text") @db.Text
+  charCount      Int                @map("char_count")
+  language       String?            @db.VarChar(16)
+  source         TextSource         @default(MANUAL)
+  // Where it came from in words: a file name and row, or what the person typed in "source".
+  sourceNote     String?            @map("source_note") @db.VarChar(255)
+  sourceRow      Int?               @map("source_row")
+  // The import it came from: a plain reference (not a foreign key), so organization deletion cascades cleanly in MySQL.
+  importBatchId  String?            @map("import_batch_id")
+  // Who wrote or said it, only as provided by a person (never inferred).
+  author         String?            @db.VarChar(255)
+  rightsStatus   MediaRightsStatus  @default(UNVERIFIED) @map("rights_status")
+  rightsNotes    String?            @map("rights_notes") @db.Text
+  approvalStatus TextApprovalStatus @default(PENDING) @map("approval_status")
+  approvedById   String?            @map("approved_by_id")
+  approvedAt     DateTime?          @map("approved_at")
+  reviewNote     String?            @map("review_note") @db.Text
+  notes          String?            @db.Text
+  createdById    String?            @map("created_by_id")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  categories     TextEntryCategory[]
+  campaigns      TextEntryCampaign[]
+  pageCategories TextEntryPageCategory[]
+  pages          TextEntryPage[]
+  pageGroups     TextEntryPageGroup[]
+  collections    TextCollectionItem[]
+  usages         TextUsage[]
+
+  // The same text exists once per organization (an archived one can be restored instead of re-added).
+  @@unique([organizationId, normalizedHash])
+  @@index([organizationId, approvalStatus, createdAt])
+  @@index([organizationId, language])
+  @@index([organizationId, importBatchId])
+  @@map("text_entries")
+}
+
+model TextEntryCategory {
+  id         String   @id @default(cuid())
+  textId     String   @map("text_id")
+  categoryId String   @map("category_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  text     TextEntry    @relation(fields: [textId], references: [id], onDelete: Cascade)
+  category TextCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([textId, categoryId])
+  @@index([categoryId])
+  @@map("text_entry_categories")
+}
+
+model TextEntryCampaign {
+  id         String   @id @default(cuid())
+  textId     String   @map("text_id")
+  campaignId String   @map("campaign_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  text     TextEntry @relation(fields: [textId], references: [id], onDelete: Cascade)
+  campaign Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([textId, campaignId])
+  @@index([campaignId])
+  @@map("text_entry_campaigns")
+}
+
+model TextEntryPageCategory {
+  id         String   @id @default(cuid())
+  textId     String   @map("text_id")
+  categoryId String   @map("category_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  text     TextEntry    @relation(fields: [textId], references: [id], onDelete: Cascade)
+  category PageCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([textId, categoryId])
+  @@index([categoryId])
+  @@map("text_entry_page_categories")
+}
+
+model TextEntryPage {
+  id         String   @id @default(cuid())
+  textId     String   @map("text_id")
+  pageId     String   @map("page_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  text TextEntry   @relation(fields: [textId], references: [id], onDelete: Cascade)
+  page ManagedPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([textId, pageId])
+  @@index([pageId])
+  @@map("text_entry_pages")
+}
+
+model TextEntryPageGroup {
+  id         String   @id @default(cuid())
+  textId     String   @map("text_id")
+  groupId    String   @map("group_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  text  TextEntry @relation(fields: [textId], references: [id], onDelete: Cascade)
+  group PageGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([textId, groupId])
+  @@index([groupId])
+  @@map("text_entry_page_groups")
+}
+
+model TextCollection {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  name           String
+  description    String?       @db.Text
+  status         LibraryStatus @default(ACTIVE)
+  createdById    String?       @map("created_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items        TextCollectionItem[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@map("text_collections")
+}
+
+model TextCollectionItem {
+  id           String   @id @default(cuid())
+  collectionId String   @map("collection_id")
+  textId       String   @map("text_id")
+  addedAt      DateTime @default(now()) @map("added_at")
+
+  collection TextCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  text       TextEntry      @relation(fields: [textId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, textId])
+  @@index([textId])
+  @@map("text_collection_items")
+}
+
+// Where a text was used. Never written by preview. A person records it (MANUAL), a publication links it (PUBLICATION)
+// or the renderer does (RENDER, Phase 5C). The references to the page, campaign, recipe, source file and content are plain ids,
+// not foreign keys: the history must survive their removal, and MySQL cannot cascade an organization delete through
+// "SET NULL" links that sit on the same cascade path (the interface shows a reference whose target is gone as removed).
+model TextUsage {
+  id             String        @id @default(cuid())
+  organizationId String        @map("organization_id")
+  textId         String        @map("text_id")
+  kind           TextUsageKind
+  usedAt         DateTime      @default(now()) @map("used_at")
+  note           String?       @db.VarChar(500)
+  pageId         String?       @map("page_id")
+  campaignId     String?       @map("campaign_id")
+  recipeId       String?       @map("recipe_id")
+  mediaAssetId   String?       @map("media_asset_id")
+  contentId      String?       @map("content_id")
+  recordedById   String?       @map("recorded_by_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  text         TextEntry    @relation(fields: [textId], references: [id], onDelete: Cascade)
+
+  @@index([textId, usedAt])
+  @@index([organizationId, pageId, usedAt])
+  @@index([contentId])
+  @@index([recipeId])
+  @@index([mediaAssetId])
+  @@map("text_usages")
+}
+
+model ContentRecipe {
+  id                     String        @id @default(cuid())
+  organizationId         String        @map("organization_id")
+  name                   String
+  description            String?       @db.Text
+  status                 LibraryStatus @default(ACTIVE)
+  // An id from the Phase 4 editorial formats (CINEMATIC_QUOTE, MEME_LAYOUT ...), or null.
+  formatId               String?       @map("format_id") @db.VarChar(64)
+  // The built-in preset this recipe was created from (traceability), or null.
+  presetKey              String?       @map("preset_key") @db.VarChar(64)
+  // RecipeConfig (packages/studio): every setting nullable; null = inherit from page / group / category / default.
+  config                 Json
+  schemaVersion          Int           @default(1) @map("schema_version")
+  // The last selections used in the preview (asset, text, page or group, unsaved adjustments), so it reopens as left.
+  previewConfig          Json?         @map("preview_config")
+  // Plain references (see TextUsage): the text category the recipe is meant for, and the recipe this one was copied from.
+  requiredTextCategoryId String?       @map("required_text_category_id")
+  duplicatedFromId       String?       @map("duplicated_from_id")
+  version                Int           @default(1)
+  createdById            String?       @map("created_by_id")
+  updatedById            String?       @map("updated_by_id")
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pageCategories ContentRecipePageCategory[]
+  pageGroups     ContentRecipePageGroup[]
+  pages          ContentRecipePage[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status])
+  @@index([organizationId, presetKey])
+  @@index([requiredTextCategoryId])
+  @@map("content_recipes")
+}
+
+model ContentRecipePageCategory {
+  id         String   @id @default(cuid())
+  recipeId   String   @map("recipe_id")
+  categoryId String   @map("category_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  recipe   ContentRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  category PageCategory  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeId, categoryId])
+  @@index([categoryId])
+  @@map("content_recipe_page_categories")
+}
+
+model ContentRecipePageGroup {
+  id         String   @id @default(cuid())
+  recipeId   String   @map("recipe_id")
+  groupId    String   @map("group_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  recipe ContentRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  group  PageGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeId, groupId])
+  @@index([groupId])
+  @@map("content_recipe_page_groups")
+}
+
+model ContentRecipePage {
+  id         String   @id @default(cuid())
+  recipeId   String   @map("recipe_id")
+  pageId     String   @map("page_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  recipe ContentRecipe @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  page   ManagedPage   @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeId, pageId])
+  @@index([pageId])
+  @@map("content_recipe_pages")
+}
+
+// =============================================================================
+// Phase 5C: rendering
+//
+// A MediaRenderJob is one render of one recipe over one source file and one approved text, for one page or group. It
+// freezes everything the render used (the recipe configuration and version, the effective settings with the source of
+// each, the exact words) so the output can always be explained, and it records the outcome (the plan, the fonts used,
+// warnings, the output validation). Progress lives in the operation_tasks ledger, as for every other background task.
+// The output is stored in the private media library as an ordinary MediaAsset (origin RENDER). The legacy VideoRenderJob
+// of Phase 07 is untouched.
+//
+// References to other records are plain ids, not foreign keys (see TextUsage): a history must survive the removal of a
+// page or recipe, and MySQL cannot cascade an organization delete through SET NULL links on one cascade path.
+// =============================================================================
+
+enum MediaAssetOrigin {
+  UPLOAD
+  RENDER
+}
+
+enum RenderJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model MediaRenderJob {
+  id                String          @id @default(cuid())
+  organizationId    String          @map("organization_id")
+  status            RenderJobStatus @default(QUEUED)
+  // What was rendered (provenance).
+  sourceAssetId     String          @map("source_asset_id")
+  sourceSha256      String          @map("source_sha256") @db.VarChar(64)
+  textId            String          @map("text_id")
+  // The exact words that were rendered (the library text can be edited later).
+  textSnapshot      String          @map("text_snapshot") @db.Text
+  textLanguage      String?         @map("text_language") @db.VarChar(16)
+  recipeId          String          @map("recipe_id")
+  recipeName        String          @map("recipe_name")
+  recipeVersion     Int             @map("recipe_version")
+  pageId            String?         @map("page_id")
+  pageGroupId       String?         @map("page_group_id")
+  campaignId        String?         @map("campaign_id")
+  // The settings used: the recipe configuration as it was, the preview adjustment (if any) and the effective values with where each came from.
+  recipeConfig      Json            @map("recipe_config")
+  adjustment        Json?
+  effective         Json
+  // Identifies the same render: an identical request while one is queued, running or finished is the same job.
+  dedupeKey         String          @map("dedupe_key") @db.VarChar(64)
+  // = dedupeKey while the job is QUEUED, RUNNING or SUCCEEDED, NULL once it failed, was cancelled or was superseded:
+  // the unique index below is what makes a duplicate render impossible, even for two requests at the same instant.
+  activeKey         String?         @map("active_key") @db.VarChar(64)
+  retryOfId         String?         @map("retry_of_id")
+  taskId            String?         @map("task_id")
+  attempts          Int             @default(0)
+  cancelRequestedAt DateTime?       @map("cancel_requested_at")
+  outputAssetId     String?         @map("output_asset_id")
+  outputKind        String?         @map("output_kind") @db.VarChar(16)
+  // The plan, fonts, warnings, validation and readability of the finished (or failed) render.
+  result            Json?
+  errorCode         String?         @map("error_code") @db.VarChar(64)
+  errorMessage      String?         @map("error_message") @db.Text
+  errorRemedy       String?         @map("error_remedy") @db.Text
+  createdById       String?         @map("created_by_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  startedAt         DateTime?       @map("started_at")
+  finishedAt        DateTime?       @map("finished_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, activeKey])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, dedupeKey])
+  @@index([sourceAssetId])
+  @@index([pageId])
+  @@map("media_render_jobs")
 }

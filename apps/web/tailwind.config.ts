@@ -24,6 +24,17 @@ const config: Config = {
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
       },
+      // Indeterminate progress: a highlight sliding across the track. Used only when a task has no measurable total
+      // (docs/SOCIALITH_UX_DESIGN_SYSTEM.md section 6); motion-reduce variants switch it off.
+      keyframes: {
+        indeterminate: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(350%)" },
+        },
+      },
+      animation: {
+        indeterminate: "indeterminate 1.4s linear infinite",
+      },
     },
   },
   plugins: [],

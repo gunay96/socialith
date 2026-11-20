@@ -11,6 +11,7 @@ export default defineConfig({
     alias: [
       { find: /^@\//, replacement: src },
       { find: "@socialith/publishing", replacement: pkg("publishing") },
+      { find: "@socialith/studio", replacement: pkg("studio") },
       { find: "@socialith/types", replacement: pkg("types") },
     ],
   },

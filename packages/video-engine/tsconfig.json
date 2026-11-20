@@ -1,5 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src", "types": ["node"] },
+  "compilerOptions": {
+    "types": ["node"],
+    // Typecheck and tests resolve workspace packages to SOURCE (no other package needs a dist/ first); tsconfig.build.json emits.
+    "paths": {
+      "@socialith/publishing": ["../publishing/src/index.ts"],
+      "@socialith/studio": ["../studio/src/index.ts"]
+    }
+  },
   "include": ["src"]
 }

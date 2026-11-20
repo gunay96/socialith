@@ -84,6 +84,15 @@ jobs:
       - name: Start MySQL 8.4 and Redis
         run: docker compose -f docker-compose.mysql-test.yml up -d --wait mysql84 redis
 
+      # Phase 5: the media tests run the REAL ffmpeg/ffprobe on generated sample media (probe, thumbnails, rendering).
+      # With CI=true they fail, instead of skipping, if FFmpeg is missing.
+      - name: Install FFmpeg and fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core fonts-liberation
+          ffmpeg -version | head -n 1
+          ffprobe -version | head -n 1
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

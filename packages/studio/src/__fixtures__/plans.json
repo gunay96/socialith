@@ -1,0 +1,7130 @@
+{
+ "plain/short/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1244,
+   "width": 864,
+   "height": 276
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps",
+    220,
+    1244,
+    1353,
+    639
+   ],
+   [
+    "every day.",
+    259,
+    1382,
+    1491,
+    563
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/short/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 739,
+   "width": 864,
+   "height": 78
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    191,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/short/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 739,
+   "width": 1536,
+   "height": 78
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    611,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/short/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 875,
+   "width": 864,
+   "height": 194
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every",
+    198,
+    875,
+    952,
+    684
+   ],
+   [
+    "day.",
+    459,
+    972,
+    1049,
+    162
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/long/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 109,
+  "stepPx": 131,
+  "fits": true,
+  "adjustments": [
+   "The font size was reduced from 115 to 109 px so the text fits the safe area.",
+   "The text was moved up by 424 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 303,
+   "width": 864,
+   "height": 1310
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up",
+    183,
+    303,
+    406,
+    715
+   ],
+   [
+    "on the thing you",
+    116,
+    434,
+    537,
+    848
+   ],
+   [
+    "started, because",
+    110,
+    565,
+    668,
+    860
+   ],
+   [
+    "the best is still",
+    161,
+    696,
+    799,
+    757
+   ],
+   [
+    "ahead.",
+    367,
+    827,
+    930,
+    345
+   ],
+   [
+    "Discipline is",
+    222,
+    958,
+    1061,
+    636
+   ],
+   [
+    "choosing what",
+    158,
+    1089,
+    1192,
+    763
+   ],
+   [
+    "you want most",
+    158,
+    1220,
+    1323,
+    763
+   ],
+   [
+    "over what you",
+    174,
+    1351,
+    1454,
+    733
+   ],
+   [
+    "want now.",
+    277,
+    1482,
+    1585,
+    527
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/long/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 544,
+   "width": 864,
+   "height": 468
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the thing",
+    132,
+    544,
+    606,
+    816
+   ],
+   [
+    "you started, because the",
+    159,
+    622,
+    684,
+    762
+   ],
+   [
+    "best is still ahead.",
+    260,
+    700,
+    762,
+    560
+   ],
+   [
+    "Discipline is choosing what",
+    114,
+    778,
+    840,
+    852
+   ],
+   [
+    "you want most over what",
+    152,
+    856,
+    918,
+    777
+   ],
+   [
+    "you want now.",
+    316,
+    934,
+    996,
+    448
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/long/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 661,
+   "width": 1536,
+   "height": 234
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Never give up on the thing you started, because",
+    220,
+    661,
+    723,
+    1481
+   ],
+   [
+    "the best is still ahead. Discipline is choosing",
+    270,
+    739,
+    801,
+    1380
+   ],
+   [
+    "what you want most over what you want now.",
+    256,
+    817,
+    879,
+    1409
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/long/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 70 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 563,
+   "width": 864,
+   "height": 679
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the",
+    142,
+    563,
+    640,
+    797
+   ],
+   [
+    "thing you started,",
+    200,
+    660,
+    737,
+    680
+   ],
+   [
+    "because the best is",
+    166,
+    757,
+    834,
+    747
+   ],
+   [
+    "still ahead. Discipline",
+    128,
+    854,
+    931,
+    824
+   ],
+   [
+    "is choosing what you",
+    128,
+    951,
+    1028,
+    824
+   ],
+   [
+    "want most over what",
+    139,
+    1048,
+    1125,
+    801
+   ],
+   [
+    "you want now.",
+    261,
+    1145,
+    1222,
+    558
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/turkish/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1175,
+   "width": 864,
+   "height": 414
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme,",
+    243,
+    1175,
+    1284,
+    594
+   ],
+   [
+    "güzel günler",
+    201,
+    1313,
+    1422,
+    677
+   ],
+   [
+    "ışık saçar.",
+    262,
+    1451,
+    1560,
+    556
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/turkish/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 700,
+   "width": 864,
+   "height": 156
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık",
+    108,
+    700,
+    762,
+    863
+   ],
+   [
+    "saçar.",
+    446,
+    778,
+    840,
+    188
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/turkish/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 739,
+   "width": 1536,
+   "height": 78
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık saçar.",
+    425,
+    739,
+    801,
+    1069
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/turkish/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 875,
+   "width": 864,
+   "height": 194
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel",
+    216,
+    875,
+    952,
+    648
+   ],
+   [
+    "günler ışık saçar.",
+    209,
+    972,
+    1049,
+    662
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/lines/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 183 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 785,
+   "width": 864,
+   "height": 828
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    300,
+    785,
+    894,
+    479
+   ],
+   [
+    "Second line is",
+    153,
+    923,
+    1032,
+    773
+   ],
+   [
+    "a little longer",
+    182,
+    1061,
+    1170,
+    716
+   ],
+   [
+    "",
+    540,
+    1199,
+    1308,
+    0
+   ],
+   [
+    "Fourth after a",
+    169,
+    1337,
+    1446,
+    741
+   ],
+   [
+    "gap",
+    438,
+    1475,
+    1584,
+    204
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/lines/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 622,
+   "width": 864,
+   "height": 312
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    405,
+    622,
+    684,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    110,
+    700,
+    762,
+    860
+   ],
+   [
+    "",
+    540,
+    778,
+    840,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    264,
+    856,
+    918,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/lines/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 622,
+   "width": 1536,
+   "height": 312
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "First line",
+    825,
+    622,
+    684,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    530,
+    700,
+    762,
+    860
+   ],
+   [
+    "",
+    960,
+    778,
+    840,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    684,
+    856,
+    918,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "plain/lines/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 730,
+   "width": 864,
+   "height": 485
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    371,
+    730,
+    807,
+    338
+   ],
+   [
+    "Second line is a little",
+    139,
+    827,
+    904,
+    801
+   ],
+   [
+    "longer",
+    416,
+    924,
+    1001,
+    248
+   ],
+   [
+    "",
+    540,
+    1021,
+    1098,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    196,
+    1118,
+    1195,
+    689
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/short/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1206,
+   "width": 864,
+   "height": 352
+  },
+  "inner": {
+   "left": 146,
+   "width": 788
+  },
+  "lines": [
+   [
+    "Small steps",
+    220,
+    1244,
+    1353,
+    639
+   ],
+   [
+    "every day.",
+    259,
+    1382,
+    1491,
+    563
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/short/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 717,
+   "width": 864,
+   "height": 122
+  },
+  "inner": {
+   "left": 130,
+   "width": 820
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    191,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/short/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 717,
+   "width": 1536,
+   "height": 122
+  },
+  "inner": {
+   "left": 214,
+   "width": 1492
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    611,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/short/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 848,
+   "width": 864,
+   "height": 248
+  },
+  "inner": {
+   "left": 135,
+   "width": 810
+  },
+  "lines": [
+   [
+    "Small steps every",
+    198,
+    875,
+    952,
+    684
+   ],
+   [
+    "day.",
+    459,
+    972,
+    1049,
+    162
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/long/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 103,
+  "stepPx": 124,
+  "fits": true,
+  "adjustments": [
+   "The font size was reduced from 115 to 103 px so the text fits the safe area.",
+   "The text was moved up by 489 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 173,
+   "width": 864,
+   "height": 1440
+  },
+  "inner": {
+   "left": 146,
+   "width": 788
+  },
+  "lines": [
+   [
+    "Never give up",
+    202,
+    211,
+    309,
+    675
+   ],
+   [
+    "on the thing",
+    245,
+    335,
+    433,
+    589
+   ],
+   [
+    "you started,",
+    248,
+    459,
+    557,
+    584
+   ],
+   [
+    "because the",
+    242,
+    583,
+    681,
+    595
+   ],
+   [
+    "best is still",
+    274,
+    707,
+    805,
+    532
+   ],
+   [
+    "ahead.",
+    377,
+    831,
+    929,
+    326
+   ],
+   [
+    "Discipline is",
+    239,
+    955,
+    1053,
+    601
+   ],
+   [
+    "choosing what",
+    179,
+    1079,
+    1177,
+    721
+   ],
+   [
+    "you want most",
+    179,
+    1203,
+    1301,
+    721
+   ],
+   [
+    "over what you",
+    194,
+    1327,
+    1425,
+    693
+   ],
+   [
+    "want now.",
+    291,
+    1451,
+    1549,
+    498
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 272
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/long/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 19 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 503,
+   "width": 864,
+   "height": 512
+  },
+  "inner": {
+   "left": 130,
+   "width": 820
+  },
+  "lines": [
+   [
+    "Never give up on the thing",
+    132,
+    525,
+    587,
+    816
+   ],
+   [
+    "you started, because the",
+    159,
+    603,
+    665,
+    762
+   ],
+   [
+    "best is still ahead.",
+    260,
+    681,
+    743,
+    560
+   ],
+   [
+    "Discipline is choosing",
+    197,
+    759,
+    821,
+    686
+   ],
+   [
+    "what you want most over",
+    152,
+    837,
+    899,
+    777
+   ],
+   [
+    "what you want now.",
+    233,
+    915,
+    977,
+    614
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/long/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 639,
+   "width": 1536,
+   "height": 278
+  },
+  "inner": {
+   "left": 214,
+   "width": 1492
+  },
+  "lines": [
+   [
+    "Never give up on the thing you started, because",
+    220,
+    661,
+    723,
+    1481
+   ],
+   [
+    "the best is still ahead. Discipline is choosing",
+    270,
+    739,
+    801,
+    1380
+   ],
+   [
+    "what you want most over what you want now.",
+    256,
+    817,
+    879,
+    1409
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/long/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 145 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 412,
+   "width": 864,
+   "height": 830
+  },
+  "inner": {
+   "left": 135,
+   "width": 810
+  },
+  "lines": [
+   [
+    "Never give up on the",
+    142,
+    439,
+    516,
+    797
+   ],
+   [
+    "thing you started,",
+    200,
+    536,
+    613,
+    680
+   ],
+   [
+    "because the best is",
+    166,
+    633,
+    710,
+    747
+   ],
+   [
+    "still ahead.",
+    331,
+    730,
+    807,
+    419
+   ],
+   [
+    "Discipline is",
+    304,
+    827,
+    904,
+    473
+   ],
+   [
+    "choosing what you",
+    173,
+    924,
+    1001,
+    734
+   ],
+   [
+    "want most over what",
+    139,
+    1021,
+    1098,
+    801
+   ],
+   [
+    "you want now.",
+    261,
+    1118,
+    1195,
+    558
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/turkish/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 14 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1123,
+   "width": 864,
+   "height": 490
+  },
+  "inner": {
+   "left": 146,
+   "width": 788
+  },
+  "lines": [
+   [
+    "Vazgeçme,",
+    243,
+    1161,
+    1270,
+    594
+   ],
+   [
+    "güzel günler",
+    201,
+    1299,
+    1408,
+    677
+   ],
+   [
+    "ışık saçar.",
+    262,
+    1437,
+    1546,
+    556
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/turkish/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 678,
+   "width": 864,
+   "height": 200
+  },
+  "inner": {
+   "left": 130,
+   "width": 820
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler",
+    172,
+    700,
+    762,
+    737
+   ],
+   [
+    "ışık saçar.",
+    383,
+    778,
+    840,
+    314
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/turkish/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 717,
+   "width": 1536,
+   "height": 122
+  },
+  "inner": {
+   "left": 214,
+   "width": 1492
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık saçar.",
+    425,
+    739,
+    801,
+    1069
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/turkish/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 848,
+   "width": 864,
+   "height": 248
+  },
+  "inner": {
+   "left": 135,
+   "width": 810
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel",
+    216,
+    875,
+    952,
+    648
+   ],
+   [
+    "günler ışık saçar.",
+    209,
+    972,
+    1049,
+    662
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/lines/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 221 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 709,
+   "width": 864,
+   "height": 904
+  },
+  "inner": {
+   "left": 146,
+   "width": 788
+  },
+  "lines": [
+   [
+    "First line",
+    300,
+    747,
+    856,
+    479
+   ],
+   [
+    "Second line is",
+    153,
+    885,
+    994,
+    773
+   ],
+   [
+    "a little longer",
+    182,
+    1023,
+    1132,
+    716
+   ],
+   [
+    "",
+    540,
+    1161,
+    1270,
+    0
+   ],
+   [
+    "Fourth after a",
+    169,
+    1299,
+    1408,
+    741
+   ],
+   [
+    "gap",
+    438,
+    1437,
+    1546,
+    204
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/lines/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 561,
+   "width": 864,
+   "height": 434
+  },
+  "inner": {
+   "left": 130,
+   "width": 820
+  },
+  "lines": [
+   [
+    "First line",
+    405,
+    583,
+    645,
+    271
+   ],
+   [
+    "Second line is a little",
+    218,
+    661,
+    723,
+    643
+   ],
+   [
+    "longer",
+    441,
+    739,
+    801,
+    199
+   ],
+   [
+    "",
+    540,
+    817,
+    879,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    264,
+    895,
+    957,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/lines/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 600,
+   "width": 1536,
+   "height": 356
+  },
+  "inner": {
+   "left": 214,
+   "width": 1492
+  },
+  "lines": [
+   [
+    "First line",
+    825,
+    622,
+    684,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    530,
+    700,
+    762,
+    860
+   ],
+   [
+    "",
+    960,
+    778,
+    840,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    684,
+    856,
+    918,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "box/lines/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 703,
+   "width": 864,
+   "height": 539
+  },
+  "inner": {
+   "left": 135,
+   "width": 810
+  },
+  "lines": [
+   [
+    "First line",
+    371,
+    730,
+    807,
+    338
+   ],
+   [
+    "Second line is a little",
+    139,
+    827,
+    904,
+    801
+   ],
+   [
+    "longer",
+    416,
+    924,
+    1001,
+    248
+   ],
+   [
+    "",
+    540,
+    1021,
+    1098,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    196,
+    1118,
+    1195,
+    689
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/short/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 784,
+   "width": 1080,
+   "height": 352
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps",
+    108,
+    822,
+    931,
+    639
+   ],
+   [
+    "every day.",
+    108,
+    960,
+    1069,
+    563
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/short/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 479,
+   "width": 1080,
+   "height": 122
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    108,
+    501,
+    563,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/short/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 479,
+   "width": 1920,
+   "height": 122
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    192,
+    501,
+    563,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/short/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 551,
+   "width": 1080,
+   "height": 248
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every",
+    108,
+    578,
+    655,
+    684
+   ],
+   [
+    "day.",
+    108,
+    675,
+    752,
+    162
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/long/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 109,
+  "stepPx": 131,
+  "fits": true,
+  "adjustments": [
+   "The font size was reduced from 115 to 109 px so the text fits the safe area.",
+   "The text was moved up by 40 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 227,
+   "width": 1080,
+   "height": 1386
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up",
+    108,
+    265,
+    368,
+    715
+   ],
+   [
+    "on the thing you",
+    108,
+    396,
+    499,
+    848
+   ],
+   [
+    "started, because",
+    108,
+    527,
+    630,
+    860
+   ],
+   [
+    "the best is still",
+    108,
+    658,
+    761,
+    757
+   ],
+   [
+    "ahead.",
+    108,
+    789,
+    892,
+    345
+   ],
+   [
+    "Discipline is",
+    108,
+    920,
+    1023,
+    636
+   ],
+   [
+    "choosing what",
+    108,
+    1051,
+    1154,
+    763
+   ],
+   [
+    "you want most",
+    108,
+    1182,
+    1285,
+    763
+   ],
+   [
+    "over what you",
+    108,
+    1313,
+    1416,
+    733
+   ],
+   [
+    "want now.",
+    108,
+    1444,
+    1547,
+    527
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/long/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 284,
+   "width": 1080,
+   "height": 512
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the thing",
+    108,
+    306,
+    368,
+    816
+   ],
+   [
+    "you started, because the",
+    108,
+    384,
+    446,
+    762
+   ],
+   [
+    "best is still ahead.",
+    108,
+    462,
+    524,
+    560
+   ],
+   [
+    "Discipline is choosing what",
+    108,
+    540,
+    602,
+    852
+   ],
+   [
+    "you want most over what",
+    108,
+    618,
+    680,
+    777
+   ],
+   [
+    "you want now.",
+    108,
+    696,
+    758,
+    448
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/long/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 401,
+   "width": 1920,
+   "height": 278
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Never give up on the thing you started, because",
+    192,
+    423,
+    485,
+    1481
+   ],
+   [
+    "the best is still ahead. Discipline is choosing",
+    192,
+    501,
+    563,
+    1380
+   ],
+   [
+    "what you want most over what you want now.",
+    192,
+    579,
+    641,
+    1409
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/long/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 309,
+   "width": 1080,
+   "height": 733
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the",
+    108,
+    336,
+    413,
+    797
+   ],
+   [
+    "thing you started,",
+    108,
+    433,
+    510,
+    680
+   ],
+   [
+    "because the best is",
+    108,
+    530,
+    607,
+    747
+   ],
+   [
+    "still ahead. Discipline",
+    108,
+    627,
+    704,
+    824
+   ],
+   [
+    "is choosing what you",
+    108,
+    724,
+    801,
+    824
+   ],
+   [
+    "want most over what",
+    108,
+    821,
+    898,
+    801
+   ],
+   [
+    "you want now.",
+    108,
+    918,
+    995,
+    558
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/turkish/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 715,
+   "width": 1080,
+   "height": 490
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme,",
+    108,
+    753,
+    862,
+    594
+   ],
+   [
+    "güzel günler",
+    108,
+    891,
+    1000,
+    677
+   ],
+   [
+    "ışık saçar.",
+    108,
+    1029,
+    1138,
+    556
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/turkish/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 440,
+   "width": 1080,
+   "height": 200
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık",
+    108,
+    462,
+    524,
+    863
+   ],
+   [
+    "saçar.",
+    108,
+    540,
+    602,
+    188
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/turkish/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 479,
+   "width": 1920,
+   "height": 122
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık saçar.",
+    192,
+    501,
+    563,
+    1069
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/turkish/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 551,
+   "width": 1080,
+   "height": 248
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel",
+    108,
+    578,
+    655,
+    648
+   ],
+   [
+    "günler ışık saçar.",
+    108,
+    675,
+    752,
+    662
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/lines/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 508,
+   "width": 1080,
+   "height": 904
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    108,
+    546,
+    655,
+    479
+   ],
+   [
+    "Second line is",
+    108,
+    684,
+    793,
+    773
+   ],
+   [
+    "a little longer",
+    108,
+    822,
+    931,
+    716
+   ],
+   [
+    "",
+    108,
+    960,
+    1069,
+    0
+   ],
+   [
+    "Fourth after a",
+    108,
+    1098,
+    1207,
+    741
+   ],
+   [
+    "gap",
+    108,
+    1236,
+    1345,
+    204
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/lines/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 362,
+   "width": 1080,
+   "height": 356
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    108,
+    384,
+    446,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    108,
+    462,
+    524,
+    860
+   ],
+   [
+    "",
+    108,
+    540,
+    602,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    108,
+    618,
+    680,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/lines/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 362,
+   "width": 1920,
+   "height": 356
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "First line",
+    192,
+    384,
+    446,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    192,
+    462,
+    524,
+    860
+   ],
+   [
+    "",
+    192,
+    540,
+    602,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    192,
+    618,
+    680,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "band/lines/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 0,
+   "top": 406,
+   "width": 1080,
+   "height": 539
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    108,
+    433,
+    510,
+    338
+   ],
+   [
+    "Second line is a little",
+    108,
+    530,
+    607,
+    801
+   ],
+   [
+    "longer",
+    108,
+    627,
+    704,
+    248
+   ],
+   [
+    "",
+    108,
+    724,
+    801,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    108,
+    821,
+    898,
+    689
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/short/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 96,
+  "stepPx": 115,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 423,
+   "width": 756,
+   "height": 230
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "SMALL STEPS",
+    196,
+    423,
+    514,
+    722
+   ],
+   [
+    "EVERY DAY.",
+    302,
+    538,
+    629,
+    616
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/short/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 237,
+   "width": 756,
+   "height": 130
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "SMALL STEPS EVERY",
+    301,
+    237,
+    288,
+    617
+   ],
+   [
+    "DAY.",
+    783,
+    302,
+    353,
+    135
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/short/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 288,
+   "top": 270,
+   "width": 1344,
+   "height": 65
+  },
+  "inner": {
+   "left": 288,
+   "width": 1344
+  },
+  "lines": [
+   [
+    "SMALL STEPS EVERY DAY.",
+    863,
+    270,
+    321,
+    770
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/short/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 68,
+  "stepPx": 82,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 296,
+   "width": 756,
+   "height": 164
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "SMALL STEPS",
+    407,
+    296,
+    361,
+    511
+   ],
+   [
+    "EVERY DAY.",
+    482,
+    378,
+    443,
+    436
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/long/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 86,
+  "stepPx": 103,
+  "fits": true,
+  "adjustments": [
+   "The font size was reduced from 96 to 86 px so the text fits the safe area.",
+   "The text was moved down by 286 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 154,
+   "width": 756,
+   "height": 1339
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "NEVER GIVE UP",
+    178,
+    154,
+    235,
+    740
+   ],
+   [
+    "ON THE THING",
+    212,
+    257,
+    338,
+    706
+   ],
+   [
+    "YOU STARTED,",
+    231,
+    360,
+    441,
+    687
+   ],
+   [
+    "BECAUSE THE",
+    247,
+    463,
+    544,
+    671
+   ],
+   [
+    "BEST IS STILL",
+    264,
+    566,
+    647,
+    654
+   ],
+   [
+    "AHEAD.",
+    560,
+    669,
+    750,
+    358
+   ],
+   [
+    "DISCIPLINE IS",
+    249,
+    772,
+    853,
+    669
+   ],
+   [
+    "CHOOSING",
+    399,
+    875,
+    956,
+    519
+   ],
+   [
+    "WHAT YOU",
+    408,
+    978,
+    1059,
+    510
+   ],
+   [
+    "WANT MOST",
+    333,
+    1081,
+    1162,
+    585
+   ],
+   [
+    "OVER WHAT",
+    348,
+    1184,
+    1265,
+    570
+   ],
+   [
+    "YOU WANT",
+    408,
+    1287,
+    1368,
+    510
+   ],
+   [
+    "NOW.",
+    656,
+    1390,
+    1471,
+    262
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 230
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/long/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [
+   "The text was moved down by 12 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 54,
+   "width": 756,
+   "height": 520
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "NEVER GIVE UP ON THE",
+    205,
+    54,
+    105,
+    713
+   ],
+   [
+    "THING YOU STARTED,",
+    275,
+    119,
+    170,
+    643
+   ],
+   [
+    "BECAUSE THE BEST IS",
+    252,
+    184,
+    235,
+    666
+   ],
+   [
+    "STILL AHEAD.",
+    510,
+    249,
+    300,
+    408
+   ],
+   [
+    "DISCIPLINE IS",
+    498,
+    314,
+    365,
+    420
+   ],
+   [
+    "CHOOSING WHAT YOU",
+    255,
+    379,
+    430,
+    663
+   ],
+   [
+    "WANT MOST OVER WHAT",
+    175,
+    444,
+    495,
+    743
+   ],
+   [
+    "YOU WANT NOW.",
+    416,
+    509,
+    560,
+    502
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/long/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 288,
+   "top": 172,
+   "width": 1344,
+   "height": 260
+  },
+  "inner": {
+   "left": 288,
+   "width": 1344
+  },
+  "lines": [
+   [
+    "NEVER GIVE UP ON THE THING YOU",
+    564,
+    172,
+    223,
+    1068
+   ],
+   [
+    "STARTED, BECAUSE THE BEST IS STILL",
+    477,
+    237,
+    288,
+    1155
+   ],
+   [
+    "AHEAD. DISCIPLINE IS CHOOSING WHAT YOU",
+    290,
+    302,
+    353,
+    1342
+   ],
+   [
+    "WANT MOST OVER WHAT YOU WANT NOW.",
+    370,
+    367,
+    418,
+    1262
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/long/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 68,
+  "stepPx": 82,
+  "fits": true,
+  "adjustments": [
+   "The text was moved down by 59 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 68,
+   "width": 756,
+   "height": 738
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "NEVER GIVE UP ON",
+    196,
+    68,
+    133,
+    722
+   ],
+   [
+    "THE THING YOU",
+    317,
+    150,
+    215,
+    601
+   ],
+   [
+    "STARTED, BECAUSE",
+    179,
+    232,
+    297,
+    739
+   ],
+   [
+    "THE BEST IS STILL",
+    225,
+    314,
+    379,
+    693
+   ],
+   [
+    "AHEAD. DISCIPLINE",
+    179,
+    396,
+    461,
+    739
+   ],
+   [
+    "IS CHOOSING WHAT",
+    168,
+    478,
+    543,
+    750
+   ],
+   [
+    "YOU WANT MOST",
+    276,
+    560,
+    625,
+    642
+   ],
+   [
+    "OVER WHAT YOU",
+    287,
+    642,
+    707,
+    631
+   ],
+   [
+    "WANT NOW.",
+    466,
+    724,
+    789,
+    452
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/turkish/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 96,
+  "stepPx": 115,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 308,
+   "width": 756,
+   "height": 460
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "VAZGEÇME,",
+    294,
+    308,
+    399,
+    624
+   ],
+   [
+    "GÜZEL",
+    560,
+    423,
+    514,
+    358
+   ],
+   [
+    "GÜNLER IŞIK",
+    226,
+    538,
+    629,
+    692
+   ],
+   [
+    "SAÇAR.",
+    537,
+    653,
+    744,
+    381
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/turkish/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 237,
+   "width": 756,
+   "height": 130
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "VAZGEÇME, GÜZEL",
+    348,
+    237,
+    288,
+    570
+   ],
+   [
+    "GÜNLER IŞIK SAÇAR.",
+    298,
+    302,
+    353,
+    620
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/turkish/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 288,
+   "top": 270,
+   "width": 1344,
+   "height": 65
+  },
+  "inner": {
+   "left": 288,
+   "width": 1344
+  },
+  "lines": [
+   [
+    "VAZGEÇME, GÜZEL GÜNLER IŞIK SAÇAR.",
+    425,
+    270,
+    321,
+    1207
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/turkish/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 68,
+  "stepPx": 82,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 255,
+   "width": 756,
+   "height": 246
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "VAZGEÇME, GÜZEL",
+    200,
+    255,
+    320,
+    718
+   ],
+   [
+    "GÜNLER IŞIK",
+    428,
+    337,
+    402,
+    490
+   ],
+   [
+    "SAÇAR.",
+    648,
+    419,
+    484,
+    270
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/lines/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 96,
+  "stepPx": 115,
+  "fits": true,
+  "adjustments": [
+   "The text was moved down by 19 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 154,
+   "width": 756,
+   "height": 805
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "FIRST LINE",
+    325,
+    154,
+    245,
+    593
+   ],
+   [
+    "SECOND LINE",
+    183,
+    269,
+    360,
+    735
+   ],
+   [
+    "IS A LITTLE",
+    320,
+    384,
+    475,
+    598
+   ],
+   [
+    "LONGER",
+    472,
+    499,
+    590,
+    446
+   ],
+   [
+    "",
+    918,
+    614,
+    705,
+    0
+   ],
+   [
+    "FOURTH",
+    472,
+    729,
+    820,
+    446
+   ],
+   [
+    "AFTER A GAP",
+    235,
+    844,
+    935,
+    683
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/lines/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 140,
+   "width": 756,
+   "height": 325
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "FIRST LINE",
+    584,
+    140,
+    191,
+    334
+   ],
+   [
+    "SECOND LINE IS A",
+    373,
+    205,
+    256,
+    545
+   ],
+   [
+    "LITTLE LONGER",
+    446,
+    270,
+    321,
+    472
+   ],
+   [
+    "",
+    918,
+    335,
+    386,
+    0
+   ],
+   [
+    "FOURTH AFTER A GAP",
+    265,
+    400,
+    451,
+    653
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/lines/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 54,
+  "stepPx": 65,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 288,
+   "top": 172,
+   "width": 1344,
+   "height": 260
+  },
+  "inner": {
+   "left": 288,
+   "width": 1344
+  },
+  "lines": [
+   [
+    "FIRST LINE",
+    1298,
+    172,
+    223,
+    334
+   ],
+   [
+    "SECOND LINE IS A LITTLE LONGER",
+    597,
+    237,
+    288,
+    1035
+   ],
+   [
+    "",
+    1632,
+    302,
+    353,
+    0
+   ],
+   [
+    "FOURTH AFTER A GAP",
+    979,
+    367,
+    418,
+    653
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "serifUpper/lines/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 68,
+  "stepPx": 82,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 162,
+   "top": 132,
+   "width": 756,
+   "height": 492
+  },
+  "inner": {
+   "left": 162,
+   "width": 756
+  },
+  "lines": [
+   [
+    "FIRST LINE",
+    498,
+    132,
+    197,
+    420
+   ],
+   [
+    "SECOND LINE IS A",
+    231,
+    214,
+    279,
+    687
+   ],
+   [
+    "LITTLE LONGER",
+    323,
+    296,
+    361,
+    595
+   ],
+   [
+    "",
+    918,
+    378,
+    443,
+    0
+   ],
+   [
+    "FOURTH AFTER A",
+    267,
+    460,
+    525,
+    651
+   ],
+   [
+    "GAP",
+    769,
+    542,
+    607,
+    149
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "exit": {
+    "kind": "NONE",
+    "ms": 0
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "NONE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "typewriter/short/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1244,
+   "width": 864,
+   "height": 276
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps",
+    220,
+    1244,
+    1353,
+    639
+   ],
+   [
+    "every day.",
+    259,
+    1382,
+    1491,
+    563
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 21,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    6000,
+    [
+     "Small steps every day."
+    ]
+   ]
+  ]
+ },
+ "typewriter/short/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 739,
+   "width": 864,
+   "height": 78
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    191,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 22,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    6000,
+    [
+     "Small steps every day."
+    ]
+   ]
+  ]
+ },
+ "typewriter/short/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 739,
+   "width": 1536,
+   "height": 78
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    611,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 22,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    6000,
+    [
+     "Small steps every day."
+    ]
+   ]
+  ]
+ },
+ "typewriter/short/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 875,
+   "width": 864,
+   "height": 194
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every",
+    198,
+    875,
+    952,
+    684
+   ],
+   [
+    "day.",
+    459,
+    972,
+    1049,
+    162
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 21,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    6000,
+    [
+     "Small steps every day."
+    ]
+   ]
+  ]
+ },
+ "typewriter/long/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 109,
+  "stepPx": 131,
+  "fits": true,
+  "adjustments": [
+   "The font size was reduced from 115 to 109 px so the text fits the safe area.",
+   "The text was moved up by 424 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 303,
+   "width": 864,
+   "height": 1310
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up",
+    183,
+    303,
+    406,
+    715
+   ],
+   [
+    "on the thing you",
+    116,
+    434,
+    537,
+    848
+   ],
+   [
+    "started, because",
+    110,
+    565,
+    668,
+    860
+   ],
+   [
+    "the best is still",
+    161,
+    696,
+    799,
+    757
+   ],
+   [
+    "ahead.",
+    367,
+    827,
+    930,
+    345
+   ],
+   [
+    "Discipline is",
+    222,
+    958,
+    1061,
+    636
+   ],
+   [
+    "choosing what",
+    158,
+    1089,
+    1192,
+    763
+   ],
+   [
+    "you want most",
+    158,
+    1220,
+    1323,
+    763
+   ],
+   [
+    "over what you",
+    174,
+    1351,
+    1454,
+    733
+   ],
+   [
+    "want now.",
+    277,
+    1482,
+    1585,
+    527
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 80,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    857,
+    [
+     "Never give up on"
+    ]
+   ],
+   [
+    857,
+    1714,
+    [
+     "the thing you started,"
+    ]
+   ],
+   [
+    1714,
+    2571,
+    [
+     "because the best is"
+    ]
+   ],
+   [
+    2571,
+    3428,
+    [
+     "still ahead. Discipline is"
+    ]
+   ],
+   [
+    3428,
+    4285,
+    [
+     "choosing what you want"
+    ]
+   ],
+   [
+    4285,
+    5142,
+    [
+     "most over what you"
+    ]
+   ],
+   [
+    5142,
+    5999,
+    [
+     "want now."
+    ]
+   ]
+  ]
+ },
+ "typewriter/long/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 544,
+   "width": 864,
+   "height": 468
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the thing",
+    132,
+    544,
+    606,
+    816
+   ],
+   [
+    "you started, because the",
+    159,
+    622,
+    684,
+    762
+   ],
+   [
+    "best is still ahead.",
+    260,
+    700,
+    762,
+    560
+   ],
+   [
+    "Discipline is choosing what",
+    114,
+    778,
+    840,
+    852
+   ],
+   [
+    "you want most over what",
+    152,
+    856,
+    918,
+    777
+   ],
+   [
+    "you want now.",
+    316,
+    934,
+    996,
+    448
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 80,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    857,
+    [
+     "Never give up on"
+    ]
+   ],
+   [
+    857,
+    1714,
+    [
+     "the thing you started,"
+    ]
+   ],
+   [
+    1714,
+    2571,
+    [
+     "because the best is"
+    ]
+   ],
+   [
+    2571,
+    3428,
+    [
+     "still ahead. Discipline is"
+    ]
+   ],
+   [
+    3428,
+    4285,
+    [
+     "choosing what you want"
+    ]
+   ],
+   [
+    4285,
+    5142,
+    [
+     "most over what you"
+    ]
+   ],
+   [
+    5142,
+    5999,
+    [
+     "want now."
+    ]
+   ]
+  ]
+ },
+ "typewriter/long/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 661,
+   "width": 1536,
+   "height": 234
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Never give up on the thing you started, because",
+    220,
+    661,
+    723,
+    1481
+   ],
+   [
+    "the best is still ahead. Discipline is choosing",
+    270,
+    739,
+    801,
+    1380
+   ],
+   [
+    "what you want most over what you want now.",
+    256,
+    817,
+    879,
+    1409
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 80,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    857,
+    [
+     "Never give up on"
+    ]
+   ],
+   [
+    857,
+    1714,
+    [
+     "the thing you started,"
+    ]
+   ],
+   [
+    1714,
+    2571,
+    [
+     "because the best is"
+    ]
+   ],
+   [
+    2571,
+    3428,
+    [
+     "still ahead. Discipline is"
+    ]
+   ],
+   [
+    3428,
+    4285,
+    [
+     "choosing what you want"
+    ]
+   ],
+   [
+    4285,
+    5142,
+    [
+     "most over what you"
+    ]
+   ],
+   [
+    5142,
+    5999,
+    [
+     "want now."
+    ]
+   ]
+  ]
+ },
+ "typewriter/long/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 70 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 563,
+   "width": 864,
+   "height": 679
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the",
+    142,
+    563,
+    640,
+    797
+   ],
+   [
+    "thing you started,",
+    200,
+    660,
+    737,
+    680
+   ],
+   [
+    "because the best is",
+    166,
+    757,
+    834,
+    747
+   ],
+   [
+    "still ahead. Discipline",
+    128,
+    854,
+    931,
+    824
+   ],
+   [
+    "is choosing what you",
+    128,
+    951,
+    1028,
+    824
+   ],
+   [
+    "want most over what",
+    139,
+    1048,
+    1125,
+    801
+   ],
+   [
+    "you want now.",
+    261,
+    1145,
+    1222,
+    558
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 80,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    857,
+    [
+     "Never give up on"
+    ]
+   ],
+   [
+    857,
+    1714,
+    [
+     "the thing you started,"
+    ]
+   ],
+   [
+    1714,
+    2571,
+    [
+     "because the best is"
+    ]
+   ],
+   [
+    2571,
+    3428,
+    [
+     "still ahead. Discipline is"
+    ]
+   ],
+   [
+    3428,
+    4285,
+    [
+     "choosing what you want"
+    ]
+   ],
+   [
+    4285,
+    5142,
+    [
+     "most over what you"
+    ]
+   ],
+   [
+    5142,
+    5999,
+    [
+     "want now."
+    ]
+   ]
+  ]
+ },
+ "typewriter/turkish/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1175,
+   "width": 864,
+   "height": 414
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme,",
+    243,
+    1175,
+    1284,
+    594
+   ],
+   [
+    "güzel günler",
+    201,
+    1313,
+    1422,
+    677
+   ],
+   [
+    "ışık saçar.",
+    262,
+    1451,
+    1560,
+    556
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 32,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    3000,
+    [
+     "Vazgeçme, güzel günler ışık"
+    ]
+   ],
+   [
+    3000,
+    6000,
+    [
+     "saçar."
+    ]
+   ]
+  ]
+ },
+ "typewriter/turkish/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 700,
+   "width": 864,
+   "height": 156
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık",
+    108,
+    700,
+    762,
+    863
+   ],
+   [
+    "saçar.",
+    446,
+    778,
+    840,
+    188
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 33,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    3000,
+    [
+     "Vazgeçme, güzel günler ışık"
+    ]
+   ],
+   [
+    3000,
+    6000,
+    [
+     "saçar."
+    ]
+   ]
+  ]
+ },
+ "typewriter/turkish/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 739,
+   "width": 1536,
+   "height": 78
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık saçar.",
+    425,
+    739,
+    801,
+    1069
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 34,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    3000,
+    [
+     "Vazgeçme, güzel günler ışık"
+    ]
+   ],
+   [
+    3000,
+    6000,
+    [
+     "saçar."
+    ]
+   ]
+  ]
+ },
+ "typewriter/turkish/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 875,
+   "width": 864,
+   "height": 194
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel",
+    216,
+    875,
+    952,
+    648
+   ],
+   [
+    "günler ışık saçar.",
+    209,
+    972,
+    1049,
+    662
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 33,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    3000,
+    [
+     "Vazgeçme, güzel günler ışık"
+    ]
+   ],
+   [
+    3000,
+    6000,
+    [
+     "saçar."
+    ]
+   ]
+  ]
+ },
+ "typewriter/lines/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 183 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 785,
+   "width": 864,
+   "height": 828
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    300,
+    785,
+    894,
+    479
+   ],
+   [
+    "Second line is",
+    153,
+    923,
+    1032,
+    773
+   ],
+   [
+    "a little longer",
+    182,
+    1061,
+    1170,
+    716
+   ],
+   [
+    "",
+    540,
+    1199,
+    1308,
+    0
+   ],
+   [
+    "Fourth after a",
+    169,
+    1337,
+    1446,
+    741
+   ],
+   [
+    "gap",
+    438,
+    1475,
+    1584,
+    204
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 56,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    2000,
+    [
+     "First line Second line"
+    ]
+   ],
+   [
+    2000,
+    4000,
+    [
+     "is a little longer"
+    ]
+   ],
+   [
+    4000,
+    6000,
+    [
+     "Fourth after a gap"
+    ]
+   ]
+  ]
+ },
+ "typewriter/lines/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 622,
+   "width": 864,
+   "height": 312
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    405,
+    622,
+    684,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    110,
+    700,
+    762,
+    860
+   ],
+   [
+    "",
+    540,
+    778,
+    840,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    264,
+    856,
+    918,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 58,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    2000,
+    [
+     "First line Second line"
+    ]
+   ],
+   [
+    2000,
+    4000,
+    [
+     "is a little longer"
+    ]
+   ],
+   [
+    4000,
+    6000,
+    [
+     "Fourth after a gap"
+    ]
+   ]
+  ]
+ },
+ "typewriter/lines/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 622,
+   "width": 1536,
+   "height": 312
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "First line",
+    825,
+    622,
+    684,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    530,
+    700,
+    762,
+    860
+   ],
+   [
+    "",
+    960,
+    778,
+    840,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    684,
+    856,
+    918,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 58,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    2000,
+    [
+     "First line Second line"
+    ]
+   ],
+   [
+    2000,
+    4000,
+    [
+     "is a little longer"
+    ]
+   ],
+   [
+    4000,
+    6000,
+    [
+     "Fourth after a gap"
+    ]
+   ]
+  ]
+ },
+ "typewriter/lines/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 730,
+   "width": 864,
+   "height": 485
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    371,
+    730,
+    807,
+    338
+   ],
+   [
+    "Second line is a little",
+    139,
+    827,
+    904,
+    801
+   ],
+   [
+    "longer",
+    416,
+    924,
+    1001,
+    248
+   ],
+   [
+    "",
+    540,
+    1021,
+    1098,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    196,
+    1118,
+    1195,
+    689
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "ZOOM_IN",
+    "ms": 800
+   },
+   "exit": {
+    "kind": "FADE_OUT",
+    "ms": 600
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "TYPEWRITER",
+    "durationMs": 3000,
+    "steps": 57,
+    "lineStartsMs": [],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": [
+   [
+    0,
+    2000,
+    [
+     "First line Second line"
+    ]
+   ],
+   [
+    2000,
+    4000,
+    [
+     "is a little longer"
+    ]
+   ],
+   [
+    4000,
+    6000,
+    [
+     "Fourth after a gap"
+    ]
+   ]
+  ]
+ },
+ "lineByLine/short/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1244,
+   "width": 864,
+   "height": 276
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps",
+    220,
+    1244,
+    1353,
+    639
+   ],
+   [
+    "every day.",
+    259,
+    1382,
+    1491,
+    563
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1500
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/short/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 739,
+   "width": 864,
+   "height": 78
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    191,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/short/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 739,
+   "width": 1536,
+   "height": 78
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Small steps every day.",
+    611,
+    739,
+    801,
+    697
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/short/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 875,
+   "width": 864,
+   "height": 194
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Small steps every",
+    198,
+    875,
+    952,
+    684
+   ],
+   [
+    "day.",
+    459,
+    972,
+    1049,
+    162
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1500
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/long/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 109,
+  "stepPx": 131,
+  "fits": true,
+  "adjustments": [
+   "The font size was reduced from 115 to 109 px so the text fits the safe area.",
+   "The text was moved up by 424 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 303,
+   "width": 864,
+   "height": 1310
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up",
+    183,
+    303,
+    406,
+    715
+   ],
+   [
+    "on the thing you",
+    116,
+    434,
+    537,
+    848
+   ],
+   [
+    "started, because",
+    110,
+    565,
+    668,
+    860
+   ],
+   [
+    "the best is still",
+    161,
+    696,
+    799,
+    757
+   ],
+   [
+    "ahead.",
+    367,
+    827,
+    930,
+    345
+   ],
+   [
+    "Discipline is",
+    222,
+    958,
+    1061,
+    636
+   ],
+   [
+    "choosing what",
+    158,
+    1089,
+    1192,
+    763
+   ],
+   [
+    "you want most",
+    158,
+    1220,
+    1323,
+    763
+   ],
+   [
+    "over what you",
+    174,
+    1351,
+    1454,
+    733
+   ],
+   [
+    "want now.",
+    277,
+    1482,
+    1585,
+    527
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     300,
+     600,
+     900,
+     1200,
+     1500,
+     1800,
+     2100,
+     2400,
+     2700
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/long/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 544,
+   "width": 864,
+   "height": 468
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the thing",
+    132,
+    544,
+    606,
+    816
+   ],
+   [
+    "you started, because the",
+    159,
+    622,
+    684,
+    762
+   ],
+   [
+    "best is still ahead.",
+    260,
+    700,
+    762,
+    560
+   ],
+   [
+    "Discipline is choosing what",
+    114,
+    778,
+    840,
+    852
+   ],
+   [
+    "you want most over what",
+    152,
+    856,
+    918,
+    777
+   ],
+   [
+    "you want now.",
+    316,
+    934,
+    996,
+    448
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     500,
+     1000,
+     1500,
+     2000,
+     2500
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/long/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 661,
+   "width": 1536,
+   "height": 234
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Never give up on the thing you started, because",
+    220,
+    661,
+    723,
+    1481
+   ],
+   [
+    "the best is still ahead. Discipline is choosing",
+    270,
+    739,
+    801,
+    1380
+   ],
+   [
+    "what you want most over what you want now.",
+    256,
+    817,
+    879,
+    1409
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1000,
+     2000
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/long/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 70 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 563,
+   "width": 864,
+   "height": 679
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Never give up on the",
+    142,
+    563,
+    640,
+    797
+   ],
+   [
+    "thing you started,",
+    200,
+    660,
+    737,
+    680
+   ],
+   [
+    "because the best is",
+    166,
+    757,
+    834,
+    747
+   ],
+   [
+    "still ahead. Discipline",
+    128,
+    854,
+    931,
+    824
+   ],
+   [
+    "is choosing what you",
+    128,
+    951,
+    1028,
+    824
+   ],
+   [
+    "want most over what",
+    139,
+    1048,
+    1125,
+    801
+   ],
+   [
+    "you want now.",
+    261,
+    1145,
+    1222,
+    558
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     428,
+     857,
+     1285,
+     1714,
+     2142,
+     2571
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/turkish/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 1175,
+   "width": 864,
+   "height": 414
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme,",
+    243,
+    1175,
+    1284,
+    594
+   ],
+   [
+    "güzel günler",
+    201,
+    1313,
+    1422,
+    677
+   ],
+   [
+    "ışık saçar.",
+    262,
+    1451,
+    1560,
+    556
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1000,
+     2000
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/turkish/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 700,
+   "width": 864,
+   "height": 156
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık",
+    108,
+    700,
+    762,
+    863
+   ],
+   [
+    "saçar.",
+    446,
+    778,
+    840,
+    188
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1500
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/turkish/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 739,
+   "width": 1536,
+   "height": 78
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel günler ışık saçar.",
+    425,
+    739,
+    801,
+    1069
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/turkish/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 875,
+   "width": 864,
+   "height": 194
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "Vazgeçme, güzel",
+    216,
+    875,
+    952,
+    648
+   ],
+   [
+    "günler ışık saçar.",
+    209,
+    972,
+    1049,
+    662
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1500
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/lines/9:16": {
+  "frame": {
+   "width": 1080,
+   "height": 1920
+  },
+  "fontSizePx": 115,
+  "stepPx": 138,
+  "fits": true,
+  "adjustments": [
+   "The text was moved up by 183 px to stay inside the safe area."
+  ],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 785,
+   "width": 864,
+   "height": 828
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    300,
+    785,
+    894,
+    479
+   ],
+   [
+    "Second line is",
+    153,
+    923,
+    1032,
+    773
+   ],
+   [
+    "a little longer",
+    182,
+    1061,
+    1170,
+    716
+   ],
+   [
+    "",
+    540,
+    1199,
+    1308,
+    0
+   ],
+   [
+    "Fourth after a",
+    169,
+    1337,
+    1446,
+    741
+   ],
+   [
+    "gap",
+    438,
+    1475,
+    1584,
+    204
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 77,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     600,
+     1200,
+     0,
+     1800,
+     2400
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/lines/1:1": {
+  "frame": {
+   "width": 1080,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 622,
+   "width": 864,
+   "height": 312
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    405,
+    622,
+    684,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    110,
+    700,
+    762,
+    860
+   ],
+   [
+    "",
+    540,
+    778,
+    840,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    264,
+    856,
+    918,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1000,
+     0,
+     2000
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/lines/16:9": {
+  "frame": {
+   "width": 1920,
+   "height": 1080
+  },
+  "fontSizePx": 65,
+  "stepPx": 78,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 192,
+   "top": 622,
+   "width": 1536,
+   "height": 312
+  },
+  "inner": {
+   "left": 192,
+   "width": 1536
+  },
+  "lines": [
+   [
+    "First line",
+    825,
+    622,
+    684,
+    271
+   ],
+   [
+    "Second line is a little longer",
+    530,
+    700,
+    762,
+    860
+   ],
+   [
+    "",
+    960,
+    778,
+    840,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    684,
+    856,
+    918,
+    553
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 43,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     1000,
+     0,
+     2000
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ },
+ "lineByLine/lines/4:5": {
+  "frame": {
+   "width": 1080,
+   "height": 1350
+  },
+  "fontSizePx": 81,
+  "stepPx": 97,
+  "fits": true,
+  "adjustments": [],
+  "unsupported": [],
+  "outer": {
+   "left": 108,
+   "top": 730,
+   "width": 864,
+   "height": 485
+  },
+  "inner": {
+   "left": 108,
+   "width": 864
+  },
+  "lines": [
+   [
+    "First line",
+    371,
+    730,
+    807,
+    338
+   ],
+   [
+    "Second line is a little",
+    139,
+    827,
+    904,
+    801
+   ],
+   [
+    "longer",
+    416,
+    924,
+    1001,
+    248
+   ],
+   [
+    "",
+    540,
+    1021,
+    1098,
+    0
+   ],
+   [
+    "Fourth after a gap",
+    196,
+    1118,
+    1195,
+    689
+   ]
+  ],
+  "timeline": {
+   "entry": {
+    "kind": "SLIDE_UP",
+    "ms": 700
+   },
+   "exit": {
+    "kind": "SLIDE_DOWN",
+    "ms": 700
+   },
+   "slidePx": 54,
+   "reveal": {
+    "kind": "LINE_BY_LINE",
+    "durationMs": 3000,
+    "steps": 0,
+    "lineStartsMs": [
+     0,
+     750,
+     1500,
+     0,
+     2250
+    ],
+    "lineFadeMs": 300
+   }
+  },
+  "subtitleCues": []
+ }
+}
