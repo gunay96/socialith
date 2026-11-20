@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EnvValidationError, parseEnv, resolveFfprobePath, resolveLibraryStorageConfig, resolveMediaLibraryDir, resolveMediaLimits, resolveOAuthRedirectUri } from "./index.js";
+import { EnvValidationError, parseEnv, resolveFfprobePath, resolveFontDirs, resolveLibraryStorageConfig, resolveMediaLibraryDir, resolveMediaLimits, resolveOAuthRedirectUri } from "./index.js";
 
 const BASE = {
   DATABASE_URL: "mysql://u:p@localhost:3306/db",
@@ -226,5 +226,14 @@ describe("media library configuration (Phase 5A)", () => {
     expect(resolveFfprobePath(parseEnv({ ...BASE, FFMPEG_PATH: "C:\\ff\\bin\\ffmpeg.exe" })).toLowerCase()).toContain("ffprobe.exe");
     expect(resolveFfprobePath(parseEnv({ ...BASE, FFMPEG_PATH: "/opt/ff/bin/ffmpeg", FFPROBE_PATH: "/usr/bin/ffprobe" }))).toBe("/usr/bin/ffprobe");
     expect(resolveFfprobePath(parseEnv({ ...BASE, FFMPEG_PATH: "/opt/custom/transcoder" }))).toBe("ffprobe");
+  });
+
+  it("reads the render settings, with defaults, and the font directories from FONT_DIRS", () => {
+    const env = parseEnv(BASE);
+    expect(env).toMatchObject({ RENDER_CONCURRENCY: 1, RENDER_TIMEOUT_MS: 900_000, RENDER_X264_PRESET: "veryfast", RENDER_X264_CRF: 21 });
+    expect(resolveFontDirs(env)).toBeUndefined();
+    expect(resolveFontDirs(parseEnv({ ...BASE, FONT_DIRS: "/a/fonts; /b/fonts,/c" }))).toEqual(["/a/fonts", "/b/fonts", "/c"]);
+    expect(() => parseEnv({ ...BASE, RENDER_X264_PRESET: "turbo" })).toThrow();
+    expect(() => parseEnv({ ...BASE, RENDER_X264_CRF: "99" })).toThrow();
   });
 });

@@ -12,4 +12,6 @@ export const libraryKeys = {
   original: (organizationId: string, assetId: string, fileName: string) => `${organizationId}/assets/${assetId}/original${extensionOf(fileName)}`,
   /** A generated file of an asset (thumbnail, preview). Stored separately, never over the original. */
   derivative: (organizationId: string, assetId: string, name: string, extension: string) => `${organizationId}/assets/${assetId}/${name}${extension}`,
+  /** The output of a render job (one per job, so a render that runs twice writes the same key, never a second file). */
+  render: (organizationId: string, renderJobId: string, extension: string) => `${organizationId}/renders/${renderJobId}/output${extension}`,
 } as const;

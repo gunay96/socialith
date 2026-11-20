@@ -99,6 +99,7 @@ model Organization {
   textImportBatches      TextImportBatch[]
   textUsages             TextUsage[]
   contentRecipes         ContentRecipe[]
+  mediaRenderJobs        MediaRenderJob[]
 
   @@map("organizations")
 }
@@ -1504,6 +1505,10 @@ model MediaAsset {
   createdAt           DateTime          @default(now()) @map("created_at")
   updatedAt           DateTime          @updatedAt @map("updated_at")
   analyzedAt          DateTime?         @map("analyzed_at")
+  // Phase 5C: where the file came from. UPLOAD = a person added it; RENDER = Socialith made it from a recipe (renderJobId says which job).
+  origin              MediaAssetOrigin  @default(UPLOAD)
+  // A plain id (not a foreign key); unique, so a render job can never produce two output assets, even if it runs twice.
+  renderJobId         String?           @unique @map("render_job_id")
 
   organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pack         MediaPack?            @relation(fields: [packId], references: [id], onDelete: Cascade)
@@ -2007,4 +2012,84 @@ model ContentRecipePage {
   @@unique([recipeId, pageId])
   @@index([pageId])
   @@map("content_recipe_pages")
+}
+
+// =============================================================================
+// Phase 5C: rendering
+//
+// A MediaRenderJob is one render of one recipe over one source file and one approved text, for one page or group. It
+// freezes everything the render used (the recipe configuration and version, the effective settings with the source of
+// each, the exact words) so the output can always be explained, and it records the outcome (the plan, the fonts used,
+// warnings, the output validation). Progress lives in the operation_tasks ledger, as for every other background task.
+// The output is stored in the private media library as an ordinary MediaAsset (origin RENDER). The legacy VideoRenderJob
+// of Phase 07 is untouched.
+//
+// References to other records are plain ids, not foreign keys (see TextUsage): a history must survive the removal of a
+// page or recipe, and MySQL cannot cascade an organization delete through SET NULL links on one cascade path.
+// =============================================================================
+
+enum MediaAssetOrigin {
+  UPLOAD
+  RENDER
+}
+
+enum RenderJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+model MediaRenderJob {
+  id                String          @id @default(cuid())
+  organizationId    String          @map("organization_id")
+  status            RenderJobStatus @default(QUEUED)
+  // What was rendered (provenance).
+  sourceAssetId     String          @map("source_asset_id")
+  sourceSha256      String          @map("source_sha256") @db.VarChar(64)
+  textId            String          @map("text_id")
+  // The exact words that were rendered (the library text can be edited later).
+  textSnapshot      String          @map("text_snapshot") @db.Text
+  textLanguage      String?         @map("text_language") @db.VarChar(16)
+  recipeId          String          @map("recipe_id")
+  recipeName        String          @map("recipe_name")
+  recipeVersion     Int             @map("recipe_version")
+  pageId            String?         @map("page_id")
+  pageGroupId       String?         @map("page_group_id")
+  campaignId        String?         @map("campaign_id")
+  // The settings used: the recipe configuration as it was, the preview adjustment (if any) and the effective values with where each came from.
+  recipeConfig      Json            @map("recipe_config")
+  adjustment        Json?
+  effective         Json
+  // Identifies the same render: an identical request while one is queued, running or finished is the same job.
+  dedupeKey         String          @map("dedupe_key") @db.VarChar(64)
+  // = dedupeKey while the job is QUEUED, RUNNING or SUCCEEDED, NULL once it failed, was cancelled or was superseded:
+  // the unique index below is what makes a duplicate render impossible, even for two requests at the same instant.
+  activeKey         String?         @map("active_key") @db.VarChar(64)
+  retryOfId         String?         @map("retry_of_id")
+  taskId            String?         @map("task_id")
+  attempts          Int             @default(0)
+  cancelRequestedAt DateTime?       @map("cancel_requested_at")
+  outputAssetId     String?         @map("output_asset_id")
+  outputKind        String?         @map("output_kind") @db.VarChar(16)
+  // The plan, fonts, warnings, validation and readability of the finished (or failed) render.
+  result            Json?
+  errorCode         String?         @map("error_code") @db.VarChar(64)
+  errorMessage      String?         @map("error_message") @db.Text
+  errorRemedy       String?         @map("error_remedy") @db.Text
+  createdById       String?         @map("created_by_id")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  startedAt         DateTime?       @map("started_at")
+  finishedAt        DateTime?       @map("finished_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, activeKey])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, dedupeKey])
+  @@index([sourceAssetId])
+  @@index([pageId])
+  @@map("media_render_jobs")
 }

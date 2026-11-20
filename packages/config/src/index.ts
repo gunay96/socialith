@@ -138,6 +138,13 @@ const envSchema = z
     // Text import (TXT / CSV / XLSX): most rows and bytes one import may carry.
     TEXT_IMPORT_MAX_ROWS: emptyStringAsUndefined(z.coerce.number().int().positive().default(5_000)),
     TEXT_IMPORT_MAX_BYTES: emptyStringAsUndefined(z.coerce.number().int().positive().default(5_242_880)),
+    // Phase 5C rendering. FONT_DIRS: directories (comma or semicolon separated) holding the fonts the renderer draws with;
+    // empty = the standard Linux locations of fonts-dejavu-core and fonts-liberation.
+    FONT_DIRS: emptyStringAsUndefined(z.string().optional()),
+    RENDER_CONCURRENCY: emptyStringAsUndefined(z.coerce.number().int().min(1).max(8).default(1)),
+    RENDER_TIMEOUT_MS: emptyStringAsUndefined(z.coerce.number().int().min(10_000).default(900_000)),
+    RENDER_X264_PRESET: emptyStringAsUndefined(z.enum(["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow"]).default("veryfast")),
+    RENDER_X264_CRF: emptyStringAsUndefined(z.coerce.number().int().min(14).max(30).default(21)),
     // Phase 1 scheduling reliability (apps/worker/src/scheduling).
     // A scheduled item whose time passed by MORE than this many minutes is
     // held (never auto-published): protects against posting stale content
@@ -422,6 +429,12 @@ export function resolveLibraryStorageConfig(env: Env): AssetStorageEnvConfig {
     // baseUrl is deliberately not fetchable: nothing may hand out a direct URL to a library file
     local: { baseDir: resolveMediaLibraryDir(env), baseUrl: "private://media-library" },
   };
+}
+
+/** The directories the renderer looks for fonts in: FONT_DIRS when set, else undefined (the renderer then uses its standard locations). */
+export function resolveFontDirs(env: Env): string[] | undefined {
+  const dirs = (env.FONT_DIRS ?? "").split(/[;,]/).map((d) => d.trim()).filter(Boolean);
+  return dirs.length ? dirs : undefined;
 }
 
 /** ffprobe: the explicit FFPROBE_PATH, else the binary next to FFMPEG_PATH, else "ffprobe" on PATH. */

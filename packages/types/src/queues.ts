@@ -64,6 +64,9 @@ export const QUEUE_NAMES = {
   UPLOAD_POST: "upload-post",
   // Phase 5A: ZIP extraction and media analysis (apps/worker/src/media).
   MEDIA_PROCESSING: "media-processing",
+  // Phase 5C: FFmpeg rendering of a recipe (apps/worker/src/render). Its own queue so a long render never delays ZIP
+  // extraction and analysis, and so its concurrency (CPU heavy) is set on its own.
+  MEDIA_RENDER: "media-render",
   TOKEN_REFRESH: "token-refresh",
   TOKEN_REFRESH_SCAN: "token-refresh-scan",
   NOTIFICATIONS: "notifications",
@@ -173,4 +176,19 @@ export type MediaProcessingJobData =
  */
 export function mediaProcessingJobId(taskId: string): string {
   return `media-task-${taskId}`;
+}
+
+/**
+ * Payload for QUEUE_NAMES.MEDIA_RENDER jobs (Phase 5C). The MediaRenderJob row holds everything about the render (what, with
+ * which settings, the outcome) and the OperationTask row holds its progress; the queue only says which job to run.
+ */
+export interface MediaRenderJobData {
+  kind: "RENDER";
+  taskId: string;
+  renderJobId: string;
+}
+
+/** One deterministic BullMQ job id per render job: enqueuing it twice is a no-op, and a retry is a NEW render job with its own id. */
+export function mediaRenderJobId(renderJobId: string): string {
+  return `media-render-${renderJobId}`;
 }
