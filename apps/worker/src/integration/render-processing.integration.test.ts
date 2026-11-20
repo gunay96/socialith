@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -327,6 +327,16 @@ suite("renders that fail, are refused or are cancelled", () => {
     const b = await seedJob(org.id, { id: changed.id, sha256: "f".repeat(64) });
     await runRenderJob(b.job.id, b.task.id, makeDeps().deps);
     expect((await jobRow(b.job.id)).errorCode).toBe("SOURCE_CHANGED");
+
+    // the stored bytes are changed after the render was requested: the fingerprint no longer matches, so nothing is rendered
+    const tampered = await seedSource(org.id, png, "IMAGE", { width: 800, height: 600 });
+    const t = await seedJob(org.id, tampered, { config: { duration: { mode: "SOURCE" } } });
+    appendFileSync(join(library, tampered.storageKey!), "appended after the fingerprint was taken");
+    await runRenderJob(t.job.id, t.task.id, makeDeps().deps);
+    const tamperedJob = await jobRow(t.job.id);
+    expect(tamperedJob).toMatchObject({ status: "FAILED", errorCode: "SOURCE_CHANGED", activeKey: null });
+    expect(tamperedJob.errorMessage).toContain("stored source file");
+    expect(await prisma.mediaAsset.count({ where: { renderJobId: t.job.id } })).toBe(0);
 
     const damaged = await seedSource(org.id, broken, "VIDEO", { width: 640, height: 360, durationMs: 2000 });
     const c = await seedJob(org.id, damaged, { config: { duration: { mode: "SOURCE" } } });

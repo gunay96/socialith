@@ -84,11 +84,11 @@ export default function RenderDetailPage({ params }: { params: { id: string } })
             </div>
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-sm">
               <dt className="text-muted">Saved as</dt><dd className="truncate">{job.output.originalName}</dd>
-              <dt className="text-muted">Kind</dt><dd>{kindWord(job.outputKind)}{facts?.container?.includes("mp4") ? " (MP4)" : facts?.container ? ` (${facts.container})` : ""}</dd>
+              <dt className="text-muted">Kind</dt><dd>{kindWord(job.outputKind)}{job.outputKind === "IMAGE" ? (facts?.videoCodec === "mjpeg" ? " (JPEG)" : facts?.videoCodec === "png" ? " (PNG)" : "") : facts?.container?.includes("mp4") ? " (MP4)" : facts?.container ? ` (${facts.container})` : ""}</dd>
               {facts?.width && facts.height && <><dt className="text-muted">Size</dt><dd>{facts.width} × {facts.height}</dd></>}
               {facts?.durationMs != null && job.outputKind === "VIDEO" && <><dt className="text-muted">Length</dt><dd>{formatDurationMs(facts.durationMs)}</dd></>}
-              {facts?.videoCodec && <><dt className="text-muted">Video</dt><dd>{facts.videoCodec}{facts.fps ? `, ${Math.round(facts.fps * 100) / 100} fps` : ""}</dd></>}
-              <dt className="text-muted">Audio</dt><dd>{facts?.audioCodec ?? (job.outputKind === "VIDEO" ? "none" : "-")}</dd>
+              {facts?.videoCodec && job.outputKind === "VIDEO" && <><dt className="text-muted">Video</dt><dd>{facts.videoCodec}{facts.fps ? `, ${Math.round(facts.fps * 100) / 100} fps` : ""}</dd></>}
+              {job.outputKind === "VIDEO" && <><dt className="text-muted">Audio</dt><dd>{facts?.audioCodec ?? "none"}</dd></>}
               {facts && <><dt className="text-muted">File size</dt><dd>{formatBytes(facts.sizeBytes)}</dd></>}
               {takes !== null && <><dt className="text-muted">Rendering took</dt><dd>{formatElapsed(takes)}</dd></>}
               <dt className="text-muted">Library status</dt><dd><Chip tone={TONES.GREEN}>{job.output.status.toLowerCase()}</Chip> <Link href={`/studio/assets/${job.output.id}`} className="ml-2 text-xs underline">Open in Media Library</Link></dd>

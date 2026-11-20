@@ -158,6 +158,11 @@ export async function runRenderJob(renderJobId: string, taskId: string, deps: Re
     const ext = source.originalName.slice(source.originalName.lastIndexOf(".")).toLowerCase();
     const localSource = join(workDir, `source${ext}`);
     await deps.storage.downloadToFile(source.storageKey, localSource);
+    // the fingerprint taken when the render was requested must still describe the bytes that are about to be rendered
+    if ((await sha256File(localSource)) !== job.sourceSha256) {
+      await failJob({ code: "SOURCE_CHANGED", message: "The stored source file no longer matches the fingerprint taken when this render was requested; it was modified or damaged after that.", remedy: "Restore the original file, or start a new render from the file you want." });
+      return;
+    }
 
     let totalSet = false;
     const compose = deps.compose ?? composeAndRender;

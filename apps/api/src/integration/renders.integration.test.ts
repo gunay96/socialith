@@ -257,6 +257,9 @@ suite("a render request: checked, then queued once", () => {
     const stranger = await admin();
     expect((await get(stranger, `/api/renders/${job.id}`)).status).toBe(404);
     expect((await post(stranger, `/api/renders/${job.id}/cancel`)).status).toBe(404);
+    expect((await post(stranger, `/api/renders/${job.id}/retry`)).status).toBe(404);
+    // the output file of a render is served only by the authenticated, organization-checked media route
+    expect((await get(stranger, `/api/renders?sourceAssetId=${asset.id}`)).json.data).toMatchObject({ total: 0 });
     expect((await get<{ items: unknown[] }>(stranger, "/api/renders")).json.data.items).toHaveLength(0);
   });
 });
