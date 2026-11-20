@@ -95,6 +95,7 @@ export function normalizeProfile(raw: unknown): UploadPostProfileData | null {
     username,
     displayName: str(raw.display_name),
     createdAt: parseProviderDate(raw.created_at),
+    blocked: raw.blocked === true,
     accounts,
     pendingPlatforms: [...pending].sort(),
   };

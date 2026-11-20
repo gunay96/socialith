@@ -42,7 +42,7 @@ export interface UploadPostTarget {
       providerAccountId: string;
       status: string;
       capabilities: Prisma.JsonValue;
-      profile: { username: string; status: string };
+      profile: { username: string; status: string; blocked?: boolean };
     } | null;
   };
   content: { organizationId: string; soundId: string | null };
@@ -80,6 +80,9 @@ export function assertDestinationReady(target: UploadPostTarget): { profileUsern
   }
   if (account.profile.status !== "ACTIVE") {
     throw new PublishError("The Upload-Post profile of this destination no longer exists at the provider.", "CONFIGURATION_ERROR", false);
+  }
+  if (account.profile.blocked === true) {
+    throw new PublishError("Upload-Post reports this profile as blocked. Resolve it with Upload-Post support, then retry; nothing was sent.", "CONFIGURATION_ERROR", false);
   }
   if (account.status === "DISCONNECTED") {
     throw new PublishError(`The ${platformKey} account is no longer connected in Upload-Post. Reconnect it, then retry.`, "AUTH_ERROR", false);

@@ -37,6 +37,12 @@ export interface UploadPostProfileData {
   username: string;
   displayName: string | null;
   createdAt: Date | null;
+  /**
+   * `blocked: true` as reported by the provider (observed LIVE on 2026-11-20: present on every profile, `false` for a
+   * healthy one). Its exact meaning when `true` is undocumented, so Socialith treats a blocked profile as not usable
+   * for publishing instead of guessing.
+   */
+  blocked: boolean;
   accounts: UploadPostConnectedAccountData[];
   /** Platforms the provider lists as started-but-not-finished (e.g. `tiktok_pending`). */
   pendingPlatforms: string[];

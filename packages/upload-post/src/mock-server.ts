@@ -27,6 +27,8 @@ export interface MockProfile {
   username: string;
   display_name: string | null;
   created_at: string;
+  /** Observed live: every profile carries `blocked`. Omitted = not sent at all (older shape). */
+  blocked?: boolean;
   social_accounts: Record<string, MockSocialAccount | "" | null>;
 }
 

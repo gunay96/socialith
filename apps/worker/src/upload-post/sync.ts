@@ -209,6 +209,7 @@ async function syncOneProfile(
         username: profile.username,
         displayName: profile.displayName,
         providerCreatedAt: profile.createdAt,
+        blocked: profile.blocked,
         pendingPlatforms: pending ?? undefined,
         lastSyncedAt: now,
       },
@@ -221,6 +222,7 @@ async function syncOneProfile(
     const changed =
       existing.displayName !== profile.displayName ||
       existing.status !== "ACTIVE" ||
+      existing.blocked !== profile.blocked ||
       !sameJson(existing.pendingPlatforms, pending) ||
       (existing.providerCreatedAt?.getTime() ?? null) !== (profile.createdAt?.getTime() ?? null);
     await tx.uploadPostProfile.update({
@@ -229,6 +231,7 @@ async function syncOneProfile(
         displayName: profile.displayName,
         providerCreatedAt: profile.createdAt,
         status: "ACTIVE",
+        blocked: profile.blocked,
         removedAt: null,
         pendingPlatforms: pending ?? Prisma.JsonNull,
         lastSyncedAt: now,

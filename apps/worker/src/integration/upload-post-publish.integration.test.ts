@@ -239,6 +239,18 @@ suite("Upload-Post publishing (real MySQL, contract double)", () => {
       }
     });
 
+    it("refuses a destination whose profile the provider reports as blocked, without any provider call", async () => {
+      const { target: t, acc } = await setup();
+      await prisma.uploadPostProfile.update({ where: { id: acc.profileId }, data: { blocked: true } });
+      mock.state.requests.length = 0;
+      await run(t.id);
+      const attempt = await prisma.publishAttempt.findFirstOrThrow({ where: { contentTargetId: t.id } });
+      expect(attempt.errorCode).toBe("CONFIGURATION_ERROR");
+      expect(attempt.errorMessage).toMatch(/blocked/);
+      expect((await target(t.id)).status).toBe("FAILED");
+      expect(providerRequests("/upload")).toHaveLength(0);
+    });
+
     it("refuses an unlinked destination and content with nothing to publish", async () => {
       const { target: t, acc } = await setup();
       await prisma.uploadPostConnectedAccount.update({ where: { id: acc.id }, data: { socialAccountId: null } });

@@ -876,6 +876,8 @@ model UploadPostProfile {
   displayName       String?                 @map("display_name")
   providerCreatedAt DateTime?               @map("provider_created_at")
   status            UploadPostProfileStatus @default(ACTIVE)
+  // `blocked` as reported by the provider (undocumented meaning when true): such a profile is never used for publishing.
+  blocked           Boolean                 @default(false)
   // Platforms the provider reports as started-but-unfinished (e.g. "tiktok_pending").
   pendingPlatforms  Json?                   @map("pending_platforms")
   firstSeenAt       DateTime                @default(now()) @map("first_seen_at")

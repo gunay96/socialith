@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { prisma } from "@socialith/database";
+import { Prisma, prisma } from "@socialith/database";
 import { UploadPostClient, defaultProfiles, startMockUploadPostServer, type MockUploadPostHandle } from "@socialith/upload-post";
 import { syncUploadPostProfiles } from "../upload-post/sync.js";
 
@@ -270,5 +270,90 @@ suite("Upload-Post synchronization (real MySQL, contract double)", () => {
     await prisma.uploadPostSyncRun.create({ data: { organizationId: org.id, trigger: "MANUAL", status: "RUNNING" } });
     expect((await sync(org.id)).status).toBe("SKIPPED_ALREADY_RUNNING");
     expect(await prisma.uploadPostProfile.count({ where: { organizationId: org.id } })).toBe(0);
+  });
+
+  describe("trial plan: empty profiles and profiles without connected accounts", () => {
+    /** The shape observed LIVE on 2026-11-20 (sanitized): plan default, limit 2, one profile, tiktok key = "". */
+    const LIVE_PROFILE = { username: "example_profile", display_name: null, created_at: "Thu, 20 Nov 2026 10:00:00 GMT", blocked: false, social_accounts: { tiktok: "" } };
+    const trial = () => {
+      mock.state.plan = "Default";
+      mock.state.profileLimit = 2;
+      mock.state.profiles = [structuredClone(LIVE_PROFILE) as (typeof mock.state.profiles)[number]];
+    };
+
+    it("imports the live trial shape: one profile, ZERO accounts, the provider's own plan and limit — nothing is invented", async () => {
+      trial();
+      const org = await makeOrg();
+      const out = await sync(org.id);
+      expect(out.status).toBe("SUCCEEDED");
+      if (out.status !== "SUCCEEDED") return;
+      expect(out.summary).toMatchObject({ profilesSeen: 1, profilesCreated: 1, accountsSeen: 0, accountsCreated: 0, accountsReauth: 0 });
+      expect(out.plan).toBe("default");
+      expect(out.profileLimit).toBe(2);
+      const profile = await prisma.uploadPostProfile.findUniqueOrThrow({ where: { organizationId_username: { organizationId: org.id, username: "example_profile" } } });
+      expect(profile).toMatchObject({ status: "ACTIVE", blocked: false, displayName: null, pendingPlatforms: null });
+      expect(profile.providerCreatedAt?.toISOString()).toBe("2026-11-20T10:00:00.000Z");
+      expect(await prisma.uploadPostConnectedAccount.count({ where: { organizationId: org.id } })).toBe(0);
+      expect(await prisma.socialAccount.count({ where: { organizationId: org.id } })).toBe(0);
+      // repeating changes nothing and creates nothing
+      const again = await sync(org.id);
+      expect(again.status === "SUCCEEDED" && again.summary).toMatchObject({ profilesCreated: 0, profilesUpdated: 0, accountsCreated: 0 });
+      expect(await prisma.uploadPostProfile.count({ where: { organizationId: org.id } })).toBe(1);
+    });
+
+    it("every flavour of 'no account' (empty strings, nulls, {}, missing key) yields no account rows and no pending platforms", async () => {
+      const raw = (username: string, social_accounts: unknown) => ({ username, display_name: null, created_at: "2025-01-01T00:00:00", blocked: false, social_accounts }) as unknown as (typeof mock.state.profiles)[number];
+      mock.state.profiles = [
+        raw("empty_strings", { tiktok: "", instagram: "", youtube: "" }),
+        raw("nulls", { tiktok: null }),
+        raw("empty_object", {}),
+        { username: "missing_key", display_name: null, created_at: "2025-01-01T00:00:00" } as unknown as (typeof mock.state.profiles)[number],
+      ];
+      const org = await makeOrg();
+      const out = await sync(org.id);
+      expect(out).toMatchObject({ status: "SUCCEEDED", summary: { profilesSeen: 4, profilesCreated: 4, accountsSeen: 0 } });
+      expect(await prisma.uploadPostConnectedAccount.count({ where: { organizationId: org.id } })).toBe(0);
+      expect(await prisma.uploadPostProfile.count({ where: { organizationId: org.id, pendingPlatforms: { not: Prisma.DbNull } } })).toBe(0);
+    });
+
+    it("an account that is connected LATER appears once; if it is removed again the profile stays and the account is flagged", async () => {
+      trial();
+      const org = await makeOrg();
+      await sync(org.id);
+      mock.state.profiles[0]!.social_accounts = { tiktok: "", instagram: { username: "17841400000000042", handle: "my.band", display_name: "My Band", capabilities: [] } as never };
+      const connected = await sync(org.id);
+      expect(connected.status === "SUCCEEDED" && connected.summary).toMatchObject({ accountsSeen: 1, accountsCreated: 1 });
+      expect(await accountOf(org.id, "example_profile", "instagram")).toMatchObject({ status: "CONNECTED", providerAccountId: "17841400000000042" });
+      expect(await prisma.uploadPostConnectedAccount.count({ where: { organizationId: org.id, platform: "tiktok" } })).toBe(0); // the empty tiktok entry never became an account
+
+      mock.state.profiles[0]!.social_accounts = { tiktok: "" };
+      const removed = await sync(org.id);
+      expect(removed.status === "SUCCEEDED" && removed.summary).toMatchObject({ accountsDisconnected: 1, profilesRemoved: 0 });
+      expect(await accountOf(org.id, "example_profile", "instagram")).toMatchObject({ status: "DISCONNECTED" });
+      expect((await prisma.uploadPostProfile.findFirstOrThrow({ where: { organizationId: org.id } })).status).toBe("ACTIVE");
+    });
+
+    it("an empty provider list when nothing is known yet is a valid, successful answer (limit and plan still recorded)", async () => {
+      mock.state.plan = "Default";
+      mock.state.profileLimit = 2;
+      mock.state.profiles = [];
+      const org = await makeOrg();
+      const out = await sync(org.id);
+      expect(out).toMatchObject({ status: "SUCCEEDED", plan: "default", profileLimit: 2, summary: { profilesSeen: 0, profilesCreated: 0, profilesRemoved: 0 } });
+      expect(await prisma.uploadPostProfile.count({ where: { organizationId: org.id } })).toBe(0);
+    });
+
+    it("`blocked` is stored, follows the provider in both directions, and counts as an update", async () => {
+      trial();
+      const org = await makeOrg();
+      await sync(org.id);
+      mock.state.profiles[0]!.blocked = true;
+      const blocked = await sync(org.id);
+      expect(blocked.status === "SUCCEEDED" && blocked.summary).toMatchObject({ profilesUpdated: 1 });
+      expect((await prisma.uploadPostProfile.findFirstOrThrow({ where: { organizationId: org.id } })).blocked).toBe(true);
+      mock.state.profiles[0]!.blocked = false;
+      await sync(org.id);
+      expect((await prisma.uploadPostProfile.findFirstOrThrow({ where: { organizationId: org.id } })).blocked).toBe(false);
+    });
   });
 });
