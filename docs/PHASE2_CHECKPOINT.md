@@ -17,6 +17,10 @@ Branch `phase2-uploadpost` (base `main` @ `f061229` = the merged Phase 1). **Not
 | 9 | Dashboard — 8 pages | done; checked in a browser against the real API + MySQL + the contract double |
 | 10 | Documentation (`UPLOAD_POST_INTEGRATION/API_MAPPING/SETUP/TESTING.md`), read-only live-check script | done |
 
+### Milestone 6 (2026-11-20) — live connection confirmed, trial-plan hardening
+
+The owner's key works: **read-only live checks passed** (plan `Default`, profile limit 2, 1 profile, 0 connected accounts; TikTok not available). Done since: sanitized live shapes pinned as tests; undocumented profile `blocked` flag stored (additive migration `20261120100000_upload_post_profile_blocked`), shown, and enforced (destination refused, publish fails before any provider call); **platform availability** endpoint (`GET /api/upload-post/capabilities`) + dashboard card on Overview and Plan & usage (TikTok UNAVAILABLE until the provider returns a TikTok account, with reasons and free profile slots); guidance banners for empty / account-less profiles; plan name display normalised; tests for empty profiles and profiles without accounts (worker, API, unit); opt-in **read-only live sync test** (`pnpm --filter @socialith/worker test:live-readonly`, not in CI). No plan was purchased or changed; nothing was published.
+
 **Not done / out of scope by design:** any live call (no API key on this machine), any real publication, profile creation (client method exists, not exposed), analytics sync, Page Network, AI Studio.
 
 ## 2. Git state
@@ -44,10 +48,11 @@ one publication row per target + `external_id`/`request_id`/`Idempotency-Key` pe
 | Check | Result |
 |---|---|
 | Lint / typecheck (10 workspaces) | 0 errors / clean |
-| Unit (all) | upload-post 39 · config 21 · worker 75 · api 231 (+1 POSIX-only skip) · auth 37 · video-engine 7 · web 2 |
-| MySQL **8.4.13** + Redis integration | api **74/74**, worker **76/76** |
-| MySQL 8.0.46 (compatibility) | api 74/74, worker 76/76 |
-| Schema drift (`migrate diff --exit-code`), fresh DB, all 3 migrations | none |
+| Unit (all) — after milestone 6 | upload-post 45 · config 21 · worker 75 · api 237 (+1 POSIX-only skip) · auth 37 · video-engine 7 · web 2 |
+| MySQL **8.4.13** + Redis integration — after milestone 6 | api **80/80**, worker **82/82** (MySQL 8.0 and the clean-Linux CI replay below were last run at milestone 5 and must be re-run before merge) |
+| MySQL 8.0.46 (compatibility) — milestone 5 | api 74/74, worker 76/76 |
+| Schema drift (`migrate diff --exit-code`), all 4 migrations | none (re-checked at milestone 6) |
+| **LIVE read-only** (2026-11-20): `/me`, `/users`, sync into a throwaway org | pass — see `UPLOAD_POST_TESTING.md` §4 |
 | **CI `verify` replayed on a clean Linux checkout of HEAD** (no `dist/`): install, lint, typecheck, unit, migrate, drift, api + worker integration, `pnpm build` | all pass (build 10/10) |
 | **CI `images` replayed:** compose config, shell syntax, api/worker/web image builds, new package loads inside the api and worker images, bootstrap CLI present | all pass |
 | Repo hygiene incl. history | OK |

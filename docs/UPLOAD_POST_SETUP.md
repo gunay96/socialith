@@ -49,6 +49,8 @@ It performs exactly two GET requests (`/uploadposts/me`, `/uploadposts/users`), 
 
 Profiles and their social accounts are created and connected in Upload-Post (its dashboard / connect links). In Phase 2 Socialith **reads** them; it does not create profiles or run the platforms' OAuth for Upload-Post accounts. Each profile holds at most one account per platform.
 
+On a trial/free-level plan (e.g. plan `Default`, 2 profiles) you can start with **Instagram and/or YouTube**: connect them in Upload-Post, then **Overview → Sync now**. The **Platform availability** card (Overview and Plan & usage) shows what the provider has actually confirmed; **TikTok stays UNAVAILABLE until Upload-Post returns a TikTok account**, and nothing in Socialith simulates a connection. Which platforms your plan may connect is decided by Upload-Post, not by Socialith — if a connection is refused there, that is the plan, and the card keeps saying "not confirmed". No plan purchase or upgrade is needed or performed by Socialith.
+
 ## 5. Webhooks (optional but recommended)
 
 Webhooks make results appear in seconds instead of on the next poll/sweep. Without them everything still reconciles by polling.

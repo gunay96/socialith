@@ -8,7 +8,7 @@ How Socialith uses the Upload-Post REST API, field by field, and — separately 
 |---|---|
 | **DOC** | Stated on the official documentation pages (`docs.upload-post.com`, read 2026-11-19/20 through an automated page reader, so wording is paraphrased and examples may be reconstructed). |
 | **DOUBLE** | Exercised by the automated tests against the in-repo contract double (`packages/upload-post/src/mock-server.ts`), which implements the DOC contract. Proves our handling of the documented shapes, **not** that the live service matches them. |
-| **LIVE** | Observed against the real service. **Nothing is LIVE yet** — no API key has been available on the development machine. The first LIVE checks are the two read-only calls in `UPLOAD_POST_TESTING.md`. |
+| **LIVE** | Observed against the real service. As of 2026-11-20 only two read-only calls are LIVE (`GET /me`, `GET /users`, on a trial account with an empty profile) — marked **LIVE (partial)** below. Everything involving a connected account, publishing, scheduling or webhooks is still not LIVE. Results: `UPLOAD_POST_TESTING.md` §4. |
 
 Base URL `https://api.upload-post.com/api`; header `Authorization: Apikey <key>` on every call (DOC, DOUBLE). The key is read from the server environment only.
 
@@ -16,8 +16,8 @@ Base URL `https://api.upload-post.com/api`; header `Authorization: Apikey <key>`
 
 | Purpose | Call | Client method | Evidence | Notes |
 |---|---|---|---|---|
-| Validate key, account, plan | `GET /uploadposts/me` | `getMe`, `ping` | DOC, DOUBLE | Response: `email`, `plan` (`Basic`/`Professional`/`Business`/`Default`), `analyze_shorts{limit,used,remaining,resets_at}`, `preferences`. 401 `{success:false,message:"Invalid or expired token"}`. |
-| List profiles + accounts + plan limit | `GET /uploadposts/users` | `listProfiles` | DOC, DOUBLE | `{limit, plan, profiles[]}`. **No pagination documented** — assumed to return all (225 on Business is within one response; to be confirmed LIVE). |
+| Validate key, account, plan | `GET /uploadposts/me` | `getMe`, `ping` | DOC, DOUBLE, **LIVE (partial)** | Live: 200, `plan:"Default"`, `analyze_shorts` 0/10 with `resets_at:null`, extra `x_links`/`attribution` objects (ignored). Response: `email`, `plan` (`Basic`/`Professional`/`Business`/`Default`), `analyze_shorts{limit,used,remaining,resets_at}`, `preferences`. 401 `{success:false,message:"Invalid or expired token"}`. |
+| List profiles + accounts + plan limit | `GET /uploadposts/users` | `listProfiles` | DOC, DOUBLE, **LIVE (partial)** | `{success, limit, plan, profiles[]}`. Live (trial): `limit: 2`, `plan:"default"` (lower-case), one profile `{username, social_accounts:{tiktok:""}, created_at:"<RFC-1123 GMT>", blocked:false, display_name:null}` — an unconnected platform is an **empty string**, only some platform keys are present, and every profile has an undocumented `blocked` flag. **No pagination documented** — still unverified with many profiles (225 on Business is within one response; one profile proves nothing). |
 | One profile | `GET /uploadposts/users/{username}` | `getProfile` | DOC, DOUBLE | 404 → `null`. |
 | Create profile | `POST /uploadposts/users` | `createProfile` | DOC, DOUBLE | **Not exposed by Socialith in Phase 2** (read-only sync first). 403 `PROFILE_LIMIT_REACHED`, 409 username in use. |
 | TikTok publishing settings | `GET /uploadposts/tiktok/settings?profile=` | `getTikTokSettings` | DOC, DOUBLE | `privacy_level_options`, `max_video_post_duration_sec`, `comment/duet/stitch_disabled`. |
@@ -89,4 +89,18 @@ Events used: `upload_completed` (outcome is in the payload, no separate failure 
 6. **`reauth_required` flag latency**: how soon after a token expires `GET /users` reports it (affects how early the dashboard warns).
 7. **Webhook delivery of `social_account_*` events** requires them to be enabled in the provider dashboard (`UPLOAD_POST_SETUP.md`).
 8. **Plan limits** (monthly uploads, pending scheduled posts 5 000–50 000 by plan) are provider-enforced; Socialith only reports the profile limit and surfaces refusals.
-9. Documentation inconsistencies noted: `external_id` max 255 (upload) vs ≤ 200 (history filter); `created_at` has two timestamp formats (both parsed); the reference page mentions cursor pagination that the history endpoint page does not document.
+9. **`blocked: true`**: the flag exists (LIVE, `false`), its meaning when true is undocumented. Socialith never publishes through a blocked profile and shows it as BLOCKED.
+10. Documentation inconsistencies noted: `external_id` max 255 (upload) vs ≤ 200 (history filter); `created_at` has two timestamp formats (both parsed); the reference page mentions cursor pagination that the history endpoint page does not document.
+
+## 7. Platform availability (Socialith's own rule, not a provider field)
+
+Upload-Post exposes **no** endpoint that says which platforms a plan includes, so Socialith never infers availability from the plan name. `GET /api/upload-post/capabilities` (all roles may read) derives it only from synchronized data (`apps/api/src/services/upload-post-capabilities.ts`, unit-tested):
+
+| State | Meaning |
+|---|---|
+| `AVAILABLE` | at least one account for the platform is `CONNECTED` in an active, non-blocked profile — i.e. the provider has **confirmed** it by returning the account |
+| `REAUTH_REQUIRED` | the only accounts need reconnecting |
+| `PENDING` | a connection was started (`<platform>_pending`) but not finished |
+| `UNAVAILABLE` | everything else, with a reason: never synchronized / no profile exists / no account connected (provider has not confirmed access) / the holding profile is blocked |
+
+TikTok is therefore `UNAVAILABLE` until Upload-Post returns a TikTok account; its **music** feature is additionally `UNAVAILABLE` until that account reports the `music` capability. Each unavailable platform lists the profiles that still have a free slot for it (one account per platform per profile). Platforms Socialith cannot publish to yet (`facebook`, `x`, …) are listed as synchronize-only. Whether a *trial* plan is able to connect Instagram/YouTube/TikTok is **not known** from the API; the first answer is an account actually appearing after the owner connects it in Upload-Post and runs **Sync now**.
