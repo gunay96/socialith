@@ -81,6 +81,24 @@ export async function enqueueUploadPostSync(organizationId: string): Promise<"QU
   return "QUEUED";
 }
 
+/**
+ * Queues an immediate Upload-Post sweep (hand-off, drift = reschedule/cancel at the provider, status sync) so an
+ * operator's change reaches the provider within seconds instead of on the next minute tick. Deduplicated: one
+ * pending on-demand sweep at most. The database stays the source of truth either way — the repeatable sweep
+ * would do the same work a minute later.
+ */
+export async function enqueueUploadPostSweep(): Promise<boolean> {
+  if (!uploadPostQueue) return false;
+  const existing = await uploadPostQueue.getJob("upload-post-manual-sweep");
+  if (existing) {
+    const state = await existing.getState();
+    if (state === "waiting" || state === "delayed") return true;
+    await existing.remove().catch(() => undefined);
+  }
+  await uploadPostQueue.add("upload-post-sweep", { kind: "sweep" }, { jobId: "upload-post-manual-sweep", removeOnComplete: true, removeOnFail: true });
+  return true;
+}
+
 /** Queues a webhook-triggered reconcile for one publication (hints only; the worker re-reads the provider status). */
 export async function enqueueUploadPostReconcile(hint: { requestId?: string; jobId?: string; externalId?: string; deliveryId?: string }): Promise<boolean> {
   if (!uploadPostQueue) return false;

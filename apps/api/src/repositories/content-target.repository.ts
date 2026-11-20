@@ -72,9 +72,18 @@ export async function scheduleContentTargets(
   contentId: string,
   scheduledAt: Date,
   db: Db = prisma,
+  options: { requireApproved?: boolean } = {},
 ): Promise<number> {
+  // Phase 3: targets that are already SCHEDULED move to the new time too (rescheduling a content item must move its
+  // targets, each of which now carries its own time); HELD / CANCELLED targets are parked on purpose and never
+  // re-scheduled by this bulk path; when the organization requires approval only APPROVED targets qualify.
   const result = await db.contentTarget.updateMany({
-    where: { contentId, status: "PENDING" },
+    where: {
+      contentId,
+      status: { in: ["PENDING", "SCHEDULED"] },
+      exception: null,
+      ...(options.requireApproved ? { approvalStatus: "APPROVED" as const } : {}),
+    },
     data: { status: "SCHEDULED", scheduledAt },
   });
   return result.count;
@@ -97,7 +106,7 @@ export function findContentTargetByAccount(contentId: string, socialAccountId: s
 export async function resetTargetForRetry(contentTargetId: string): Promise<boolean> {
   const result = await prisma.contentTarget.updateMany({
     where: { id: contentTargetId, status: "FAILED" },
-    data: { status: "PUBLISHING", errorMessage: null },
+    data: { status: "PUBLISHING", errorMessage: null, exception: null }, // a STALE marker ends with the retry
   });
   return result.count === 1;
 }

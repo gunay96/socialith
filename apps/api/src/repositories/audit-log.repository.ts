@@ -39,7 +39,16 @@ export type AuditAction =
   | "MUSIC_MAPPING_CREATED"
   | "MUSIC_MAPPING_VERIFIED"
   | "MUSIC_MAPPING_RIGHTS_CHANGED"
-  | "MUSIC_MAPPING_DELETED";
+  | "MUSIC_MAPPING_DELETED"
+  // Phase 3: Publishing Center (approvals and scheduling are also kept per publication in publication_events).
+  | "PUBLISHING_SETTINGS_CHANGED"
+  | "PUBLICATION_CREATED"
+  | "PUBLICATION_SUBMITTED"
+  | "PUBLICATION_APPROVED"
+  | "PUBLICATION_REJECTED"
+  | "PUBLICATION_SCHEDULED"
+  | "PUBLICATION_RESCHEDULED"
+  | "PUBLICATION_CANCELLED";
 
 interface CreateAuditLogInput {
   organizationId: string;

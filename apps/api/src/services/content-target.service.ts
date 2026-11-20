@@ -15,7 +15,8 @@ import {
 import { listPublishAttempts, type PublishAttempt } from "../repositories/publish-attempt.repository.js";
 import { listMetricsSnapshots, type PostMetricsSnapshot } from "../repositories/analytics.repository.js";
 import { updateContent } from "../repositories/content.repository.js";
-import { enqueueContentScheduling, enqueuePublishingJob, enqueueAnalyticsSync } from "../lib/queue.js";
+import { enqueuePublishingJob, enqueueAnalyticsSync } from "../lib/queue.js";
+import { armContentScheduling, getEffectiveSettings, rollUpContent } from "./publishing-common.js";
 import type { Content, ContentTargetStatus } from "@socialith/database";
 import type { SafeUser } from "../types/auth.js";
 
@@ -91,15 +92,27 @@ export async function scheduleContent(actor: SafeUser, contentId: string, schedu
     );
   }
 
-  const updated = await prisma.$transaction(async (tx) => {
-    const result = await updateContent(contentId, { status: "SCHEDULED", scheduledAt }, tx);
-    await scheduleContentTargets(contentId, scheduledAt, tx);
-    return result;
+  // Phase 3: when the organization requires approval, only APPROVED destinations can be scheduled here — this bulk path
+  // must not be a way around the Publishing Center's approval workflow.
+  const settings = await getEffectiveSettings(actor.organizationId);
+  await prisma.$transaction(async (tx) => {
+    const scheduled = await scheduleContentTargets(contentId, scheduledAt, tx, { requireApproved: settings.requireApproval });
+    if (scheduled === 0) {
+      throw new ApiHttpError(
+        409,
+        ERROR_CODES.CONFLICT,
+        settings.requireApproval
+          ? "None of this content's destinations is approved. Submit them for review and have each one approved before scheduling."
+          : "No destination of this content can be scheduled (every target is already running, finished, held or cancelled).",
+      );
+    }
+    await updateContent(contentId, { status: "SCHEDULED", scheduledAt }, tx);
+    await rollUpContent(tx, contentId); // SCHEDULED, at the earliest scheduled target
   });
 
-  await enqueueContentScheduling(contentId, scheduledAt);
+  await armContentScheduling(contentId);
 
-  return updated;
+  return prisma.content.findUniqueOrThrow({ where: { id: contentId } });
 }
 
 /**
