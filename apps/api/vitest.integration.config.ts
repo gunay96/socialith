@@ -1,4 +1,6 @@
 import { defineConfig } from "vitest/config";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import tsconfigPaths from "vite-tsconfig-paths";
 
 // Real-database integration tests (MySQL). Deliberately a separate config so
@@ -36,6 +38,10 @@ export default defineConfig({
       UPLOAD_POST_BASE_URL: "http://127.0.0.1:39870/api",
       UPLOAD_POST_WEBHOOK_SECRET: "whsec_integration_secret_value_1",
       UPLOAD_POST_WEBHOOK_SECRET_PREVIOUS: "whsec_integration_previous_value_2",
+      // Phase 5A media library: an isolated private library directory and small limits so the "too large" paths are testable.
+      MEDIA_LIBRARY_DIR: join(tmpdir(), "socialith-it-media-library"),
+      MEDIA_MAX_FILE_BYTES: "5000000",
+      MEDIA_MAX_ARCHIVE_BYTES: "5000000",
       ...(process.env.REDIS_INTEGRATION_URL ? { REDIS_URL: process.env.REDIS_INTEGRATION_URL } : {}),
     },
   },

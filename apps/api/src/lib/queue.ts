@@ -9,6 +9,8 @@ import {
   type VideoRenderJobData,
   type PublishingJobData,
   type AnalyticsSyncJobData,
+  type MediaProcessingJobData,
+  mediaProcessingJobId,
 } from "@socialith/types";
 import { logger } from "../logger.js";
 
@@ -49,6 +51,7 @@ const publishingQueue = connection ? new Queue<PublishingJobData>(QUEUE_NAMES.PU
 const analyticsSyncQueue = connection
   ? new Queue<AnalyticsSyncJobData>(QUEUE_NAMES.ANALYTICS_SYNC, { connection })
   : undefined;
+const mediaProcessingQueue = connection ? new Queue<MediaProcessingJobData>(QUEUE_NAMES.MEDIA_PROCESSING, { connection }) : undefined;
 
 /** Deterministic per-content job ID (shared with the worker's reconciler via @socialith/types) — enqueuing again for the same content
  * (re-scheduling) removes any prior pending job first, so a content item
@@ -126,6 +129,29 @@ export async function enqueueVideoRender(jobRowId: string): Promise<void> {
   await videoRenderQueue.add(QUEUE_NAMES.VIDEO_RENDER, { jobRowId }, { jobId: jobRowId, ...GENERATION_JOB_OPTIONS });
 }
 
+/** Background processing needs Redis and the worker. Media uploads refuse (503) instead of storing files nothing will ever process. */
+export class QueueUnavailableError extends Error {
+  constructor() {
+    super("Background processing is not available: Redis is not configured for this deployment.");
+    this.name = "QueueUnavailableError";
+  }
+}
+
+/**
+ * Enqueues ZIP extraction / asset analysis. The job id is derived from the task id, so enqueuing the same task twice (a
+ * double click, a retried request, a recovery pass) never creates a second job. Unlike the Phase 07 producers above
+ * this does NOT no-op without Redis: it throws, because pretending the work was queued would leave a task that can
+ * never finish.
+ */
+export async function enqueueMediaProcessing(data: MediaProcessingJobData): Promise<void> {
+  if (!mediaProcessingQueue) throw new QueueUnavailableError();
+  await mediaProcessingQueue.add(QUEUE_NAMES.MEDIA_PROCESSING, data, {
+    jobId: mediaProcessingJobId(data.taskId),
+    ...GENERATION_JOB_OPTIONS,
+    removeOnComplete: { age: 24 * 3600, count: 1000 },
+    removeOnFail: { age: 7 * 24 * 3600 },
+  });
+}
 export interface QueueHealthEntry {
   name: string;
   waiting: number;
@@ -144,7 +170,7 @@ export interface QueueHealthEntry {
  * already confirmed Redis is reachable.
  */
 export async function getQueueHealth(): Promise<QueueHealthEntry[]> {
-  const queues = [contentSchedulingQueue, contentGenerationQueue, videoRenderQueue, publishingQueue, analyticsSyncQueue].filter(
+  const queues = [contentSchedulingQueue, contentGenerationQueue, videoRenderQueue, publishingQueue, analyticsSyncQueue, mediaProcessingQueue].filter(
     (q): q is NonNullable<typeof q> => q !== undefined,
   );
   return Promise.all(
