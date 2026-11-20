@@ -324,10 +324,15 @@ async function scheduleInternal(actor: SafeUser, t: Publication, at: Date, tz: s
   if (settings.requireApproval) {
     if (t.approvalStatus !== "APPROVED") throw new ApiHttpError(409, ERROR_CODES.CONFLICT, "This publication has not been approved. Submit it for review and have it approved before scheduling.");
     if (!payloadMatchesApproval(t.approvedPayload, payloadOf(t))) {
+      // A publication that is already SCHEDULED goes back to the plan state with its approval: it must not stay scheduled
+      // on an approval that no longer applies (the worker's gate would hold it anyway; the database says so honestly).
+      const wasScheduled = t.status === "SCHEDULED";
       await prisma.$transaction(async (tx) => {
-        await casUpdate(tx, t, { approvalStatus: "DRAFT", approvedPayload: null, approvedById: null, approvedAt: null });
+        await casUpdate(tx, t, { approvalStatus: "DRAFT", approvedPayload: null, approvedById: null, approvedAt: null, ...(wasScheduled ? { status: "PENDING" } : {}) });
+        if (wasScheduled) await rollUpContent(tx, t.contentId);
         await recordEvent(tx, { organizationId: actor.organizationId, contentTargetId: t.id, type: "INVALIDATED", fromState: state, toState: "DRAFT", actorId: actor.id, reason: "The content changed after it was approved." });
       });
+      if (wasScheduled) await afterChange(t, { providerRelevant: providerRelevant(t) });
       throw new ApiHttpError(409, ERROR_CODES.CONFLICT, "The content changed after it was approved, so the approval was withdrawn. Review it and approve it again.");
     }
   }

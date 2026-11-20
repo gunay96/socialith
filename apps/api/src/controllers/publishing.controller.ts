@@ -47,6 +47,9 @@ export const listDestinations: RequestHandler = wrap(async (req) => ({ data: awa
 export const getSettings: RequestHandler = wrap(async (req) => ({ data: await settings.getSettings(user(req)) }));
 export const updateSettings: RequestHandler = wrap(async (req) => ({ data: await settings.updateSettings(user(req), parse(schema.settingsSchema, req.body, "body")) }));
 
+export const listCampaignSettings: RequestHandler = wrap(async (req) => ({ data: await settings.listCampaignSettings(user(req)) }));
+export const setCampaignAutoSchedule: RequestHandler = wrap(async (req) => ({ data: await settings.setCampaignAutoSchedule(user(req), idParam(req), parse(schema.campaignAutoScheduleSchema, req.body, "body").autoScheduleOnApproval) }));
+
 export const createPublications: RequestHandler = wrap(async (req) => ({ status: 201, data: await workflow.createPublications(user(req), parse(schema.createPublicationsSchema, req.body, "body")) }));
 export const updatePublication: RequestHandler = wrap(async (req) => ({ data: await workflow.updatePublication(user(req), idParam(req), parse(schema.updatePublicationSchema, req.body, "body")) }));
 export const submitPublication: RequestHandler = wrap(async (req) => ({ data: await workflow.submitPublication(user(req), idParam(req)) }));

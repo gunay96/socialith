@@ -231,6 +231,30 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
     });
   });
 
+  describe("campaign automatic-scheduling setting", () => {
+    useServer();
+    it("is admin-only, audited, tri-state (inherit / on / off) and organization-scoped", async () => {
+      const admin = await makeOrg("ADMIN");
+      const editor = await addUser(admin.orgId, "EDITOR");
+      const other = await makeOrg("ADMIN");
+      const campaign = await prisma.campaign.create({ data: { organizationId: admin.orgId, name: "Single launch" } });
+      type Row = { id: string; autoScheduleOnApproval: boolean | null; effective: boolean };
+      const list = async (s: Session) => (await get<{ organizationDefault: boolean; items: Row[] }>(s, "/api/publishing/campaigns")).json.data;
+      expect((await list(editor)).items[0]).toMatchObject({ autoScheduleOnApproval: null, effective: false }); // editors can read
+      expect((await http("PUT", `/api/publishing/campaigns/${campaign.id}`, { cookie: editor.cookie, body: { autoScheduleOnApproval: true } })).status).toBe(403);
+      expect((await http("PUT", `/api/publishing/campaigns/${campaign.id}`, { cookie: other.cookie, body: { autoScheduleOnApproval: true } })).status).toBe(404);
+      expect((await http("PUT", `/api/publishing/campaigns/${campaign.id}`, { cookie: admin.cookie, body: { autoScheduleOnApproval: "yes" } })).status).toBe(400);
+      expect((await http("PUT", `/api/publishing/campaigns/${campaign.id}`, { cookie: admin.cookie, body: { autoScheduleOnApproval: true } })).status).toBe(200);
+      expect((await list(admin)).items[0]).toMatchObject({ autoScheduleOnApproval: true, effective: true });
+      await setSettings(admin, { autoScheduleOnApproval: true });
+      await http("PUT", `/api/publishing/campaigns/${campaign.id}`, { cookie: admin.cookie, body: { autoScheduleOnApproval: false } });
+      expect((await list(admin)).items[0]).toMatchObject({ autoScheduleOnApproval: false, effective: false }); // the campaign overrides the organization
+      await http("PUT", `/api/publishing/campaigns/${campaign.id}`, { cookie: admin.cookie, body: { autoScheduleOnApproval: null } });
+      expect((await list(admin)).items[0]).toMatchObject({ autoScheduleOnApproval: null, effective: true }); // back to inheriting
+      expect(await prisma.auditLog.count({ where: { organizationId: admin.orgId, targetType: "Campaign", action: "PUBLISHING_SETTINGS_CHANGED" } })).toBe(3);
+      expect((await list(other)).items).toHaveLength(0);
+    });
+  });
   describe("approval workflow (DRAFT → READY_FOR_REVIEW → APPROVED → SCHEDULED)", () => {
     useServer();
     it("walks the whole lifecycle with history: who, when, why — and the job follows the database", async () => {
@@ -355,6 +379,27 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
       expect((await detail(admin, id)).state).toBe("DRAFT");
     });
 
+    it("a SCHEDULED publication whose content changes behind its back loses its approval AND its schedule when someone reschedules it (job removed, provider swept)", async () => {
+      const admin = await makeOrg("ADMIN");
+      await setSettings(admin, { requireApproval: true });
+      const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
+      const content = await makeContent(admin.orgId);
+      const [c] = (await createPubs(admin, content.id, [{ socialAccountId: social.id }])).created;
+      const id = c!.publication.id;
+      await act(admin, id, "submit");
+      await act(admin, id, "approve");
+      await act(admin, id, "schedule", { scheduledAt: inMs(3 * HOUR) });
+      expect(await schedulingQueue().getJob(contentSchedulingJobId(content.id))).toBeTruthy();
+
+      await prisma.content.update({ where: { id: content.id }, data: { caption: "edited through the content API after approval" } });
+      const r = await post(admin, `/api/publishing/publications/${id}/schedule`, { scheduledAt: inMs(5 * HOUR) });
+      expect(r.status).toBe(409);
+      const d = await detail(admin, id);
+      expect(d.state).toBe("DRAFT"); // not "scheduled" on an approval that no longer applies
+      expect(d.events.map((e) => e.type)).toContain("INVALIDATED");
+      expect(await schedulingQueue().getJob(contentSchedulingJobId(content.id))).toBeFalsy();
+      expect((await prisma.content.findUniqueOrThrow({ where: { id: content.id } })).status).toBe("READY");
+    });
     it("an organization that does NOT require approval can schedule straight from DRAFT (legacy behaviour preserved)", async () => {
       const admin = await makeOrg("ADMIN");
       const { social } = await makeDestination(admin.orgId, "TIKTOK", "band");
@@ -990,6 +1035,7 @@ suite("Publishing Center API (real MySQL + Redis, real express app)", () => {
       expect((await list(`?creatorId=${creator.id}`)).items.map((d) => d.handle)).toEqual(["ready.one"]);
       expect((await list(`?managedPageId=${page.id}`)).items.map((d) => d.handle)).toEqual(["ready.one"]);
       expect((await list("?search=broken")).items.map((d) => d.handle)).toEqual(["broken.one"]);
+      expect((await list(`?ids=${broken.social.id},nope`)).items.map((d) => d.handle)).toEqual(["broken.one"]); // exactly the requested ids; unknown ids are ignored
     });
   });
 });

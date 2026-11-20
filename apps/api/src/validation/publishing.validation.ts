@@ -43,6 +43,8 @@ export const calendarQuerySchema = z
 export const destinationsQuerySchema = z.object({
   page,
   pageSize,
+  /** ?ids=a,b,c: fetch exactly these destinations (the wizard re-loads a remembered selection). */
+  ids: z.string().optional().transform((s) => (s ? s.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 100) : undefined)),
   search: z.string().trim().min(1).max(100).optional(),
   platform: platform.optional(),
   provider: z.enum(["NATIVE", "UPLOAD_POST"]).optional(),
@@ -81,6 +83,8 @@ export const validateSchema = z.object({ scheduledAt: instant.nullable().optiona
 export const approveSchema = z.object({ note: z.string().trim().max(1000).nullable().optional() });
 export const rejectSchema = z.object({ reason: z.string().trim().min(3, "a reason is required").max(1000) });
 export const optionalReasonSchema = z.object({ reason: z.string().trim().max(1000).nullable().optional() });
+
+export const campaignAutoScheduleSchema = z.object({ autoScheduleOnApproval: z.boolean().nullable() });
 
 export const settingsSchema = z
   .object({

@@ -20,6 +20,8 @@ export function createPublishingRouter(): Router {
   r.get("/publishing/destinations", ...read, c.listDestinations);
   r.get("/publishing/settings", ...read, c.getSettings);
   r.put("/publishing/settings", ...admin, c.updateSettings);
+  r.get("/publishing/campaigns", ...read, c.listCampaignSettings);
+  r.put("/publishing/campaigns/:id", ...admin, c.setCampaignAutoSchedule);
 
   r.get("/publishing/publications", ...read, c.listPublications);
   r.post("/publishing/publications", ...editor, c.createPublications);

@@ -216,11 +216,12 @@ export async function getPublicationDetail(actor: SafeUser, id: string) {
  */
 export async function listDestinations(
   actor: SafeUser,
-  q: { page: number; pageSize: number; search?: string; platform?: "TIKTOK" | "INSTAGRAM" | "YOUTUBE"; provider?: "NATIVE" | "UPLOAD_POST"; creatorId?: string; managedPageId?: string; readyOnly?: boolean },
+  q: { page: number; pageSize: number; ids?: string[]; search?: string; platform?: "TIKTOK" | "INSTAGRAM" | "YOUTUBE"; provider?: "NATIVE" | "UPLOAD_POST"; creatorId?: string; managedPageId?: string; readyOnly?: boolean },
 ) {
   const settings = await getEffectiveSettings(actor.organizationId);
   const where: Prisma.SocialAccountWhereInput = {
     organizationId: actor.organizationId,
+    ...(q.ids ? { id: { in: q.ids } } : {}),
     ...(q.platform ? { platform: q.platform } : {}),
     ...(q.provider ? { publishingProvider: q.provider } : {}),
     ...(q.search ? { OR: [{ handle: { contains: q.search } }, { displayName: { contains: q.search } }] } : {}),
