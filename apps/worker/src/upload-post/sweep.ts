@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@socialith/database";
 import { UploadPostError, type UploadPostClient } from "@socialith/upload-post";
 import { finalizeContentStatus } from "../publishing/finalize.js";
+import { evaluateApprovalGate } from "../publishing/approval-gate.js";
 import { logger as defaultLogger } from "../logger.js";
 import { PublishError } from "../publishing/types.js";
 import { applyProviderStatus } from "./status.js";
@@ -10,6 +11,7 @@ import {
   chooseMedia,
   externalIdFor,
   requestIdFor,
+  requiredMusicProblem,
   resolveTikTokMusic,
   type UploadPostTarget,
 } from "./publish.js";
@@ -114,7 +116,7 @@ export async function sweepUploadPost(deps: SweepDeps): Promise<SweepSummary> {
   // 2. drift on provider-owned schedules --------------------------------------------------------
   const scheduled = await db.uploadPostPublication.findMany({
     where: { status: "SCHEDULED_AT_PROVIDER", providerJobId: { not: null } },
-    include: { contentTarget: { select: { id: true, status: true, content: { select: { id: true, status: true, scheduledAt: true } } } } },
+    include: { contentTarget: { select: { id: true, status: true, scheduledAt: true, content: { select: { id: true, status: true, scheduledAt: true } } } } },
     take: BATCH,
   });
   for (const pub of scheduled) {
@@ -124,12 +126,14 @@ export async function sweepUploadPost(deps: SweepDeps): Promise<SweepSummary> {
     const dueInFlight = pub.scheduledFor !== null && pub.scheduledFor.getTime() <= now.getTime();
     if (dueInFlight) continue; // the provider is running it (or ran it): status sync below decides
 
+    // Phase 3: a target has its own time; the content's time is only the fallback for a target that has none.
+    const at = target.scheduledAt ?? content.scheduledAt;
     const release =
       target.status !== "SCHEDULED" ||
       !["SCHEDULED", "PUBLISHING"].includes(content.status) ||
-      !content.scheduledAt ||
-      content.scheduledAt.getTime() - now.getTime() < config.minLeadMs ||
-      content.scheduledAt.getTime() - now.getTime() > config.handoffWindowMs;
+      !at ||
+      at.getTime() - now.getTime() < config.minLeadMs ||
+      at.getTime() - now.getTime() > config.handoffWindowMs;
 
     try {
       if (release) {
@@ -137,9 +141,9 @@ export async function sweepUploadPost(deps: SweepDeps): Promise<SweepSummary> {
         await db.uploadPostPublication.update({ where: { id: pub.id }, data: { status: "CANCELLED", lastErrorKind: "SCHEDULE_CHANGED", lastErrorMessage: "Cancelled at the provider because the Socialith schedule changed.", lastSyncedAt: now } });
         summary.driftCancelled++;
         log.info({ publicationId: pub.id, jobId }, "upload-post sweep: cancelled a provider schedule (Socialith schedule changed)");
-      } else if (content.scheduledAt && pub.scheduledFor && Math.abs(content.scheduledAt.getTime() - pub.scheduledFor.getTime()) > 1_000) {
-        await client.editScheduled(jobId, { scheduledDate: content.scheduledAt.toISOString(), timezone: "UTC" });
-        await db.uploadPostPublication.update({ where: { id: pub.id }, data: { scheduledFor: content.scheduledAt, lastSyncedAt: now } });
+      } else if (at && pub.scheduledFor && Math.abs(at.getTime() - pub.scheduledFor.getTime()) > 1_000) {
+        await client.editScheduled(jobId, { scheduledDate: at.toISOString(), timezone: "UTC" });
+        await db.uploadPostPublication.update({ where: { id: pub.id }, data: { scheduledFor: at, lastSyncedAt: now } });
         summary.driftRescheduled++;
         log.info({ publicationId: pub.id, jobId }, "upload-post sweep: rescheduled the provider job to the new Socialith time");
       }
@@ -198,11 +202,17 @@ export async function sweepUploadPost(deps: SweepDeps): Promise<SweepSummary> {
       where: {
         status: "SCHEDULED",
         socialAccount: { publishingProvider: "UPLOAD_POST" },
-        content: {
-          status: "SCHEDULED",
-          scheduledAt: { gte: new Date(now.getTime() + config.minLeadMs), lte: new Date(now.getTime() + config.handoffWindowMs) },
-        },
-        OR: [{ uploadPostPublication: { is: null } }, { uploadPostPublication: { is: { status: "CANCELLED" } } }],
+        content: { status: "SCHEDULED" },
+        // the target's own time decides (Phase 3); a target without one falls back to its content's time
+        AND: [
+          {
+            OR: [
+              { scheduledAt: { gte: new Date(now.getTime() + config.minLeadMs), lte: new Date(now.getTime() + config.handoffWindowMs) } },
+              { scheduledAt: null, content: { scheduledAt: { gte: new Date(now.getTime() + config.minLeadMs), lte: new Date(now.getTime() + config.handoffWindowMs) } } },
+            ],
+          },
+          { OR: [{ uploadPostPublication: { is: null } }, { uploadPostPublication: { is: { status: "CANCELLED" } } }] },
+        ],
       },
       include: {
         content: { select: { organizationId: true, soundId: true, scheduledAt: true } },
@@ -212,7 +222,7 @@ export async function sweepUploadPost(deps: SweepDeps): Promise<SweepSummary> {
       take: 50,
     });
     for (const target of candidates) {
-      const outcome = await handOff(deps, target as unknown as UploadPostTarget & { content: { scheduledAt: Date | null }; uploadPostPublication: { id: string; generation: number } | null }, now);
+      const outcome = await handOff(deps, target as unknown as UploadPostTarget & { scheduledAt: Date | null; content: { scheduledAt: Date | null }; uploadPostPublication: { id: string; generation: number } | null }, now);
       if (outcome === "HANDED_OFF") summary.handedOff++;
       else if (outcome === "RATE_LIMITED") break;
       else summary.handoffSkipped++;
@@ -224,13 +234,20 @@ export async function sweepUploadPost(deps: SweepDeps): Promise<SweepSummary> {
 
 async function handOff(
   deps: SweepDeps,
-  target: UploadPostTarget & { content: { scheduledAt: Date | null }; uploadPostPublication: { id: string; generation: number } | null },
+  target: UploadPostTarget & { scheduledAt: Date | null; content: { scheduledAt: Date | null }; uploadPostPublication: { id: string; generation: number } | null },
   now: Date,
 ): Promise<"HANDED_OFF" | "SKIPPED" | "RATE_LIMITED"> {
   const { db, client } = deps;
   const log = deps.log ?? defaultLogger;
-  const dueAt = target.content.scheduledAt;
+  const dueAt = target.scheduledAt ?? target.content.scheduledAt;
   if (!dueAt) return "SKIPPED";
+
+  // Never give an unapproved (or changed-since-approval) publication to the provider's scheduler.
+  const gate = await evaluateApprovalGate(db, target.id);
+  if (!gate.ok) {
+    log.info({ contentTargetId: target.id, gate: gate.code }, "upload-post sweep: not handing off (approval gate); Socialith keeps the target");
+    return "SKIPPED";
+  }
 
   let ready;
   try {
@@ -281,6 +298,13 @@ async function handOff(
 
   const fields = buildPlatformFields(ready.platformKey, material.caption, material.title);
   const music = await resolveTikTokMusic(db, target, ready.platformKey, ready.capabilities, now);
+  const missingMusic = requiredMusicProblem(target, music);
+  if (missingMusic) {
+    // The track is mandatory and cannot be attached: do not give it to the provider. Release the hand-off; Socialith keeps
+    // the target and its own publishing job fails it with the reason instead of publishing without the track.
+    await db.uploadPostPublication.update({ where: { id: publicationId }, data: { status: "CANCELLED", lastErrorKind: "HANDOFF_RELEASED", lastErrorMessage: missingMusic } });
+    return "SKIPPED";
+  }
   const extraFields: Record<string, string> = { ...fields.extra };
   if (music.musicId) extraFields.tiktok_music_id = music.musicId;
   await db.uploadPostPublication.update({ where: { id: publicationId }, data: { tiktokMusicId: music.musicId, notes: music.note } });

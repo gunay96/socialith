@@ -9,6 +9,8 @@ import { resolveAccessToken } from "../publishing/token.js";
 import { enqueuePublishStatusPoll } from "../publishing/enqueue.js";
 import { resolveAssetUrl } from "../publishing/assets.js";
 import { finalizeContentStatus } from "../publishing/finalize.js";
+import { evaluateApprovalGate } from "../publishing/approval-gate.js";
+import { effectiveText } from "@socialith/publishing";
 import { getUploadPostClient, toPublishError } from "../upload-post/client.js";
 import { publishViaUploadPost } from "../upload-post/publish.js";
 import { DEMO_ACCOUNT_PUBLISH_MESSAGE, isDemoAccount } from "../publishing/demo-guard.js";
@@ -20,6 +22,11 @@ const TARGET_INCLUDE = {
 } satisfies Prisma.ContentTargetInclude;
 
 type TargetWithRelations = Prisma.ContentTargetGetPayload<{ include: typeof TARGET_INCLUDE }>;
+
+/** The text actually sent for one destination: its own text wins, then the platform variation, then the base caption (same rule as the approval payload). */
+function textFor(target: TargetWithRelations, variation: { caption: string | null; title: string | null } | null): { caption: string | null; title: string | null } {
+  return effectiveText({ captionOverride: target.captionOverride, titleOverride: target.titleOverride, variationCaption: variation?.caption ?? null, variationTitle: variation?.title ?? null, contentCaption: target.content.caption });
+}
 
 interface Classified {
   code: PublishErrorCode;
@@ -219,6 +226,14 @@ export async function processPublishing(job: Job<PublishingJobData>): Promise<vo
     return;
   }
 
+  // Phase 3 approval gate: when the organization requires approval, only an APPROVED publication whose content is
+  // unchanged since approval may reach a provider — whichever path got it here (schedule, retry, recovery).
+  const gate = await evaluateApprovalGate(prisma, contentTargetId);
+  if (!gate.ok) {
+    await recordFailure(target, attemptNumber, startedAt, new PublishError(gate.message, "CONFIGURATION_ERROR", false));
+    return;
+  }
+
   // Phase 2: destinations published through Upload-Post have no native OAuth token. They follow the
   // same recording path (PublishAttempt rows, retry classification) but call the provider adapter.
   if (target.socialAccount.publishingProvider === "UPLOAD_POST") {
@@ -233,8 +248,7 @@ export async function processPublishing(job: Job<PublishingJobData>): Promise<vo
         db: prisma,
         client: getUploadPostClient(env),
         target,
-        caption: variation?.caption ?? target.content.caption,
-        title: variation?.title ?? null,
+        ...textFor(target, variation),
         assets,
       });
       await recordSuccess(target, attemptNumber, startedAt, result);
@@ -269,8 +283,7 @@ export async function processPublishing(job: Job<PublishingJobData>): Promise<vo
     socialAccountId: target.socialAccountId,
     externalAccountId: target.socialAccount.externalAccountId,
     accessToken,
-    caption: variation?.caption ?? target.content.caption,
-    title: variation?.title ?? null,
+    ...textFor(target, variation),
     assets: assetsWithFreshUrls,
     sound: target.content.sound
       ? {

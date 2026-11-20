@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@socialith/database";
+import { buildTargetPayload } from "@socialith/publishing";
 import { UploadPostClient, defaultProfiles, startMockUploadPostServer, type MockUploadPostHandle } from "@socialith/upload-post";
 
 // The processors obtain their client from this module; point it at the contract double.
@@ -273,6 +274,74 @@ suite("Upload-Post publishing (real MySQL, contract double)", () => {
     });
   });
 
+  describe("Publishing Center: approval gate, destination-specific text, required track", () => {
+    async function requireApproval(orgId: string) {
+      await prisma.publishingSettings.create({ data: { organizationId: orgId, requireApproval: true } });
+    }
+    async function approveNow(targetId: string) {
+      const t = await prisma.contentTarget.findUniqueOrThrow({ where: { id: targetId }, include: { socialAccount: { select: { platform: true } }, content: { include: { variations: true, assets: true } } } });
+      const payload = buildTargetPayload({ platform: t.socialAccount.platform, captionOverride: t.captionOverride, titleOverride: t.titleOverride, content: { caption: t.content.caption, soundId: t.content.soundId, variations: t.content.variations, assets: t.content.assets } });
+      await prisma.contentTarget.update({ where: { id: targetId }, data: { approvalStatus: "APPROVED", approvedPayload: payload } });
+    }
+
+    it("an unapproved publication never reaches the provider, whichever path started it (retry, recovery)", async () => {
+      const { org, target: t } = await setup();
+      await requireApproval(org.id);
+      await run(t.id);
+      const attempt = await prisma.publishAttempt.findFirstOrThrow({ where: { contentTargetId: t.id } });
+      expect(attempt).toMatchObject({ status: "FAILED", errorCode: "CONFIGURATION_ERROR", retryable: false });
+      expect(attempt.errorMessage).toMatch(/not been approved/);
+      expect((await target(t.id)).status).toBe("FAILED");
+      expect(providerRequests("/upload")).toHaveLength(0);
+    });
+
+    it("an approved publication goes out; content edited after approval does not", async () => {
+      const ok = await setup();
+      await requireApproval(ok.org.id);
+      await approveNow(ok.target.id);
+      await run(ok.target.id);
+      expect(providerRequests("/upload")).toHaveLength(1);
+
+      mock.state.requests.length = 0;
+      const changed = await setup();
+      await requireApproval(changed.org.id);
+      await approveNow(changed.target.id);
+      await prisma.content.update({ where: { id: changed.content.id }, data: { caption: "edited after approval" } });
+      await run(changed.target.id);
+      expect((await prisma.publishAttempt.findFirstOrThrow({ where: { contentTargetId: changed.target.id } })).errorMessage).toMatch(/changed after it was approved/);
+      expect(providerRequests("/upload")).toHaveLength(0);
+    });
+
+    it("the destination's own caption and title are what is sent, not the shared caption", async () => {
+      const { target: t } = await setup();
+      await prisma.contentTarget.update({ where: { id: t.id }, data: { captionOverride: "Written for this page only" } });
+      await run(t.id);
+      const pub = await publication(t.id);
+      expect(mock.state.publications.get(pub.requestId)!.fields.tiktok_title).toBe("Written for this page only");
+    });
+
+    it("'require the track': a missing/unverified track makes the publication fail BEFORE any provider call instead of going out without it", async () => {
+      const { org, content, target: t } = await setup();
+      const sound = await prisma.sound.create({ data: { organizationId: org.id, title: "Neon Skyline", artist: "Wave Theory", platform: "TIKTOK" } });
+      await prisma.content.update({ where: { id: content.id }, data: { soundId: sound.id } });
+      await prisma.contentTarget.update({ where: { id: t.id }, data: { requireMusic: true } });
+      await run(t.id);
+      const attempt = await prisma.publishAttempt.findFirstOrThrow({ where: { contentTargetId: t.id } });
+      expect(attempt).toMatchObject({ status: "FAILED", errorCode: "CONFIGURATION_ERROR", retryable: false });
+      expect(attempt.errorMessage).toMatch(/track is required/);
+      expect(providerRequests("/upload")).toHaveLength(0);
+      expect(await publication(t.id)).toMatchObject({ status: "FAILED", lastErrorKind: "MUSIC_REQUIRED" });
+    });
+
+    it("without 'require the track' the same situation publishes without the track and records why (unchanged behaviour)", async () => {
+      const { org, content, target: t } = await setup();
+      const sound = await prisma.sound.create({ data: { organizationId: org.id, title: "Neon Skyline", artist: "Wave Theory", platform: "TIKTOK" } });
+      await prisma.content.update({ where: { id: content.id }, data: { soundId: sound.id } });
+      await run(t.id);
+      expect(providerRequests("/upload")).toHaveLength(1);
+      expect((await publication(t.id)).notes).toMatch(/Music not attached/);
+    });
+  });
   describe("TikTok music", () => {
     async function withSound(mapping: Partial<{ availability: "VERIFIED_AVAILABLE" | "UNVERIFIED" | "UNAVAILABLE"; rightsConfirmed: boolean; verifiedAt: Date | null }> | null) {
       const s = await setup();

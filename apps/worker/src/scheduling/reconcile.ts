@@ -109,34 +109,41 @@ export async function reconcileScheduling(deps: ReconcileDeps): Promise<Reconcil
         continue;
       }
 
-      if (handoffInUse) {
-        const ours = await db.contentTarget.count({ where: { contentId: content.id, status: "SCHEDULED", ...SOCIALITH_OWNED } });
-        if (ours === 0) {
-          summary.skippedProviderOwned++;
-          continue;
-        }
+      // Phase 3: targets are scheduled independently, so the job's time is the EARLIEST time among the targets
+      // Socialith itself must fire (the content's own scheduledAt is only the fallback for a target without one).
+      const loadOurs = () => db.contentTarget.findMany({ where: { contentId: content.id, status: "SCHEDULED", ...SOCIALITH_OWNED }, select: { scheduledAt: true } });
+      let ours = await loadOurs();
+      if (handoffInUse && ours.length === 0) {
+        summary.skippedProviderOwned++;
+        continue;
       }
+      const times = () => (ours.length ? ours.map((t) => t.scheduledAt ?? content.scheduledAt!) : [content.scheduledAt]);
+      const earliest = () => new Date(Math.min(...times().map((d) => d!.getTime())));
 
-      const verdict = classifySchedule(content.scheduledAt, now, config.staleAfterMs);
-
-      if (verdict.kind === "STALE") {
+      const isStale = (at: Date) => classifySchedule(at, now, config.staleAfterMs).kind === "STALE";
+      if (times().some((d) => isStale(d!))) {
         const held = await holdStaleContent(
           db,
           { id: content.id, organizationId: content.organizationId, scheduledAt: content.scheduledAt },
           staleAfterMinutes,
           now,
         );
+        // The old job's delay no longer fits: remove it; if targets are still scheduled it is re-created below.
         await port.removeContentScheduling(content.id);
         if (held) {
           summary.heldStale++;
           log.warn(
-            { contentId: content.id, scheduledAt: content.scheduledAt.toISOString(), lateByMinutes: Math.round(verdict.lateByMs / 60_000) },
-            "scheduling-reconcile: held stale scheduled content (not published)",
+            { contentId: content.id, scheduledAt: content.scheduledAt.toISOString() },
+            "scheduling-reconcile: held stale scheduled targets (not published)",
           );
         }
-        continue;
+        const stillScheduled = await db.content.findUnique({ where: { id: content.id }, select: { status: true } });
+        if (stillScheduled?.status !== "SCHEDULED") continue;
+        ours = await loadOurs();
+        if (ours.length === 0) continue;
       }
 
+      const verdict = classifySchedule(earliest(), now, config.staleAfterMs);
       if ((await port.contentSchedulingLiveness(content.id)) !== "live") {
         await port.enqueueContentScheduling(content.id, verdict.delayMs);
         summary.schedulingJobsEnqueued++;
@@ -146,7 +153,6 @@ export async function reconcileScheduling(deps: ReconcileDeps): Promise<Reconcil
         );
       }
     }
-
     if (batch.length < PAGE_SIZE) break;
   }
 
@@ -193,7 +199,8 @@ export async function reconcileScheduling(deps: ReconcileDeps): Promise<Reconcil
       status: "PUBLISHING",
       AND: [
         { targets: { some: {} } },
-        { targets: { none: { status: { in: ["PENDING", "SCHEDULED", "PUBLISHING"] } } } },
+        // held / cancelled targets (Phase 3) are parked on purpose and do not keep a content open
+        { targets: { none: { status: { in: ["PENDING", "SCHEDULED", "PUBLISHING"] }, OR: [{ exception: null }, { exception: "STALE" }] } } },
       ],
     },
     select: { id: true },

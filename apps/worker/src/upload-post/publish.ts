@@ -29,6 +29,8 @@ export const MUSIC_VERIFICATION_MAX_AGE_MS = 30 * 24 * 3_600_000;
 
 export interface UploadPostTarget {
   id: string;
+  /** Publishing Center: make the track conditions blocking (fail instead of publishing without the track). */
+  requireMusic?: boolean;
   contentId: string;
   attemptCount: number;
   socialAccount: {
@@ -146,6 +148,15 @@ export async function resolveTikTokMusic(
     return { musicId: null, note: "Music not attached: no mapping is verified available, rights-confirmed and recently verified." };
   }
   return { musicId: usable.providerMusicId, note: null };
+}
+
+/**
+ * "Require the track" (Publishing Center): when the operator made the track mandatory for this destination and it
+ * cannot be attached, the publication must NOT go out without it. Returns the reason, or null when it may proceed.
+ */
+export function requiredMusicProblem(target: { requireMusic?: boolean }, music: { musicId: string | null; note: string | null }): string | null {
+  if (!target.requireMusic || music.musicId || !music.note) return null;
+  return `The track is required for this destination but could not be attached. ${music.note}`;
 }
 
 export function chooseMedia(assets: { type: string; url: string }[]): { kind: "video"; url: string } | { kind: "photos"; urls: string[] } | null {
@@ -293,6 +304,11 @@ export async function publishViaUploadPost(args: UploadPostPublishArgs): Promise
   // ---- build and send ------------------------------------------------------------------------
   const fields = buildPlatformFields(platformKey, args.caption, args.title);
   const music = await resolveTikTokMusic(db, target, platformKey, capabilities, now);
+  const missingMusic = requiredMusicProblem(target, music);
+  if (missingMusic) {
+    await db.uploadPostPublication.update({ where: { id: publication.id }, data: { status: "FAILED", completedAt: now, lastErrorKind: "MUSIC_REQUIRED", lastErrorMessage: missingMusic } });
+    throw new PublishError(missingMusic, "CONFIGURATION_ERROR", false);
+  }
   const extraFields: Record<string, string> = { ...fields.extra };
   if (music.musicId) extraFields.tiktok_music_id = music.musicId;
 
