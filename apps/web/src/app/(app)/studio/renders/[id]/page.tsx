@@ -94,7 +94,7 @@ export default function RenderDetailPage({ params }: { params: { id: string } })
               <dt className="text-muted">Library status</dt><dd><Chip tone={TONES.GREEN}>{job.output.status.toLowerCase()}</Chip> <Link href={`/studio/assets/${job.output.id}`} className="ml-2 text-xs underline">Open in Media Library</Link></dd>
             </dl>
           </div>
-          <p className="mt-3 text-xs text-muted">Nothing is published automatically. The file is in the Media Library, tagged &ldquo;rendered&rdquo;, ready to be chosen in the Publishing Center.</p>
+          <p className="mt-3 text-xs text-muted">Nothing is published automatically. The file is in the Media Library, tagged &ldquo;rendered&rdquo;. The Publishing Center cannot pick Media Library files yet; until that is connected, download the file and attach it through the existing upload.</p>
         </Card>
       )}
 
